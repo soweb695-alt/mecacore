@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*
+!.env.example
+.pgdata
+.storage
+test-results
+playwright-report
+coverage
+*.mov
+*.png

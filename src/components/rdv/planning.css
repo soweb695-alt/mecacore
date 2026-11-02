@@ -1,0 +1,41 @@
+/* Ajustements du calendrier (shadcn-big-calendar) pour le planning : tout passe par les variables du thème,
+   donc le calendrier suit le thème du rôle (Magasin neutre, Atelier anthracite, Administrateur bleu). */
+
+.planning-calendrier .rbc-calendar,
+.planning-calendrier .rbc-day-bg,
+.planning-calendrier .rbc-time-header,
+.planning-calendrier .rbc-time-gutter {
+  background-color: var(--card);
+}
+
+/* Les rendez-vous ont toujours un horaire : la ligne « journée entière » reste vide. */
+.planning-calendrier .rbc-time-view .rbc-allday-cell {
+  display: none;
+}
+
+.planning-calendrier .rbc-off-range-bg {
+  background-color: var(--muted);
+}
+
+/* Aujourd'hui : teinte d'accent du thème plutôt que les hachures neutres. */
+.planning-calendrier .rbc-today {
+  background-color: color-mix(in oklab, var(--accent) 70%, var(--card));
+  background-image: none;
+}
+.planning-calendrier .rbc-header.rbc-today {
+  color: var(--accent-foreground);
+}
+
+/* Rendez-vous : liseré gauche de la couleur du collaborateur (posée par planning.tsx via eventPropGetter). */
+.planning-calendrier .rbc-event {
+  border-left-width: 3px;
+  padding: 2px 5px;
+}
+.planning-calendrier .rbc-event.rdv-inactif {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.planning-calendrier .rbc-slot-selection {
+  color: var(--primary-foreground);
+}

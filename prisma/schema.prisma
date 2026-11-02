@@ -1,0 +1,681 @@
+// Schéma CRM Garage — PostgreSQL (Neon en production)
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SECRETARIAT
+  MECANICIEN
+}
+
+enum TypeClient {
+  PARTICULIER
+  PRO
+}
+
+enum TypeDevis {
+  MECANIQUE
+  PIECE
+}
+
+enum StatutDevis {
+  BROUILLON
+  ENVOYE
+  VALIDE
+  REJETE
+}
+
+enum TypeLigne {
+  MAIN_OEUVRE
+  FORFAIT
+  PIECE
+  FRAIS_DIVERS
+}
+
+enum StatutOrdre {
+  EN_ATTENTE_SIGNATURE
+  SIGNE
+  EN_COURS
+  /// Terminé par l'atelier : en attente de traitement (facturation) par le Magasin.
+  A_TRAITER_MAGASIN
+  FACTURE
+}
+
+enum StatutBonCommande {
+  EN_ATTENTE
+  RECEPTIONNEE_PARTIELLE
+  RECEPTIONNEE
+}
+
+enum StatutLivraison {
+  EN_ATTENTE
+  PRETE
+  LIVREE
+}
+
+enum StatutFacture {
+  /// Préparée automatiquement à la fin d'un OR : sans numéro, modifiable jusqu'à l'émission.
+  BROUILLON
+  EMISE
+  PARTIELLEMENT_PAYEE
+  PAYEE
+  IMPAYEE
+  ANNULEE
+}
+
+enum ModePaiement {
+  CB
+  ESPECES
+  CHEQUE
+  VIREMENT
+  PLUSIEURS_FOIS
+}
+
+enum TypeRemise {
+  EUROS
+  POURCENT
+}
+
+enum BaseRemise {
+  HT
+  TTC
+}
+
+enum StatutFiche {
+  EN_COURS
+  TRANSMISE
+  TRAITEE
+}
+
+enum ResultatControle {
+  NON_VERIFIE
+  OK
+  A_SURVEILLER
+  DEFAUT
+}
+
+enum StatutRdv {
+  PLANIFIE
+  CONFIRME
+  HONORE
+  ANNULE
+  NO_SHOW
+}
+
+enum TypeTarif {
+  MO1
+  MO2
+  MO3
+  FORFAIT
+  FRAIS_DIVERS
+}
+
+enum CanalMessage {
+  EMAIL
+  SMS
+}
+
+enum StatutMessage {
+  EN_COURS
+  ENVOYE
+  ECHEC
+  IGNORE
+}
+
+enum TypeCampagne {
+  MANUELLE
+  AUTOMATIQUE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         Role
+  couleur      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  devis          Devis[]
+  ordres         OrdreReparation[]
+  pointages      Pointage[]
+  photos         PhotoOR[]
+  rendezVous     RendezVous[]
+  factures       Facture[]
+  relances       RelanceFacture[]
+  fichesValidees FicheControle[]   @relation("FicheValidee")
+  fichesTraitees FicheControle[]   @relation("FicheTraitee")
+}
+
+model Client {
+  id             String     @id @default(cuid())
+  type           TypeClient @default(PARTICULIER)
+  firstName      String?
+  lastName       String?
+  companyName    String?
+  siret          String?
+  tvaNumber      String?
+  email          String?
+  phone          String?
+  address        String?
+  paymentTerms   Int        @default(30)
+  creditLimit    Decimal    @default(0) @db.Decimal(10, 2)
+  discountRate   Decimal    @default(0) @db.Decimal(5, 2)
+  marketingOptIn Boolean    @default(false)
+  isActive       Boolean    @default(true)
+  anonymiseLe    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  vehicules     Vehicule[]
+  devis         Devis[]
+  factures      Facture[]
+  rendezVous    RendezVous[]
+  messages      MessageLog[]
+  bonsLivraison BonLivraison[]
+
+  @@index([lastName])
+  @@index([companyName])
+  @@index([email])
+  @@index([phone])
+}
+
+model Vehicule {
+  id              String    @id @default(cuid())
+  clientId        String?
+  vin             String?
+  immatriculation String    @unique
+  marque          String
+  modele          String
+  annee           Int?
+  motorisation    String?
+  kilometrage     Int?
+  prochainCT      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  client     Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  devis      Devis[]
+  rendezVous RendezVous[]
+
+  @@index([clientId])
+  @@index([vin])
+}
+
+model Piece {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  nom                String
+  marque             String?
+  fournisseur        String?
+  categorie          String?
+  prixAchatHT        Decimal  @default(0) @db.Decimal(10, 2)
+  prixVenteHT        Decimal  @default(0) @db.Decimal(10, 2)
+  stock              Int      @default(0)
+  seuilAlerte        Int      @default(0)
+  taillePneu         String?
+  referencesCroisees String[]
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  lignesDevis     LigneDevis[]
+  tarifs          TarifPiece[]
+  lignesCommande  LigneBonCommande[]
+  lignesLivraison LigneBonLivraison[]
+
+  @@index([nom])
+  @@index([categorie])
+}
+
+model Devis {
+  id           String      @id @default(cuid())
+  numero       String      @unique
+  type         TypeDevis   @default(MECANIQUE)
+  clientId     String
+  vehiculeId   String?
+  userId       String
+  statut       StatutDevis @default(BROUILLON)
+  dateCreation DateTime    @default(now())
+  dateValidite DateTime
+  remisePro    Decimal     @default(0) @db.Decimal(5, 2)
+  kilometrage  Int?
+  totalHT      Decimal     @default(0) @db.Decimal(10, 2)
+  totalTVA     Decimal     @default(0) @db.Decimal(10, 2)
+  totalTTC     Decimal     @default(0) @db.Decimal(10, 2)
+  motifRejet   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicule     Vehicule?        @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  lignes       LigneDevis[]
+  ordre        OrdreReparation?
+  facture      Facture?
+  bonLivraison BonLivraison?
+  rendezVous   RendezVous[]
+
+  @@index([clientId])
+  @@index([statut])
+  @@index([dateCreation])
+}
+
+model LigneDevis {
+  id              String    @id @default(cuid())
+  devisId         String
+  type            TypeLigne
+  designation     String
+  quantite        Decimal   @db.Decimal(10, 2)
+  prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  prixCatalogueHT Decimal?  @db.Decimal(10, 2)
+  tvaRate         Decimal   @default(20) @db.Decimal(5, 2)
+  totalHT         Decimal   @db.Decimal(10, 2)
+  pieceId         String?
+  /// Forfait issu des tarifs : pièces comprises, figées à l'enregistrement du devis ([{ pieceId, reference, nom, quantite }]).
+  tarifId         String?
+  composition     Json?
+  position        Int       @default(0)
+
+  devis Devis  @relation(fields: [devisId], references: [id], onDelete: Cascade)
+  piece Piece? @relation(fields: [pieceId], references: [id], onDelete: Restrict)
+  tarif Tarif? @relation(fields: [tarifId], references: [id], onDelete: SetNull)
+
+  @@index([devisId])
+  @@index([pieceId])
+}
+
+model OrdreReparation {
+  id           String      @id @default(cuid())
+  numero       String      @unique
+  devisId      String      @unique
+  userId       String?
+  statut       StatutOrdre @default(EN_ATTENTE_SIGNATURE)
+  signatureUrl String?
+  signeLe      DateTime?
+  /// Kilométrage relevé par l'atelier en terminant l'OR (repris sur la facture).
+  kilometrage  Int?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  devis     Devis          @relation(fields: [devisId], references: [id], onDelete: Restrict)
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  taches    TacheOR[]
+  pointages Pointage[]
+  photos    PhotoOR[]
+  fiche     FicheControle?
+
+  @@index([userId])
+  @@index([statut])
+}
+
+model TacheOR {
+  id          String  @id @default(cuid())
+  ordreId     String
+  designation String
+  dureeHeures Decimal @default(0) @db.Decimal(5, 2)
+  terminee    Boolean @default(false)
+  position    Int     @default(0)
+
+  ordre OrdreReparation @relation(fields: [ordreId], references: [id], onDelete: Cascade)
+
+  @@index([ordreId])
+}
+
+model PhotoOR {
+  id        String   @id @default(cuid())
+  ordreId   String
+  userId    String
+  url       String
+  createdAt DateTime @default(now())
+
+  ordre OrdreReparation @relation(fields: [ordreId], references: [id], onDelete: Cascade)
+  user  User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([ordreId])
+}
+
+model Pointage {
+  id      String    @id @default(cuid())
+  ordreId String
+  userId  String
+  debut   DateTime  @default(now())
+  fin     DateTime?
+
+  ordre OrdreReparation @relation(fields: [ordreId], references: [id], onDelete: Cascade)
+  user  User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([ordreId])
+  @@index([userId, fin])
+}
+
+model BonCommande {
+  id          String            @id @default(cuid())
+  numero      String            @unique
+  fournisseur String
+  statut      StatutBonCommande @default(EN_ATTENTE)
+  automatique Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  lignes        LigneBonCommande[]
+  bonsLivraison BonLivraison[]
+}
+
+model LigneBonCommande {
+  id            String @id @default(cuid())
+  bonCommandeId String
+  pieceId       String
+  quantite      Int
+  quantiteRecue Int    @default(0)
+
+  bonCommande BonCommande @relation(fields: [bonCommandeId], references: [id], onDelete: Cascade)
+  piece       Piece       @relation(fields: [pieceId], references: [id], onDelete: Restrict)
+
+  @@index([bonCommandeId])
+}
+
+model BonLivraison {
+  id            String          @id @default(cuid())
+  numero        String          @unique
+  bonCommandeId String?
+  clientId      String?
+  devisId       String?         @unique
+  factureId     String?
+  statut        StatutLivraison @default(EN_ATTENTE)
+  dateLivraison DateTime        @default(now())
+  livreLe       DateTime?
+  createdAt     DateTime        @default(now())
+
+  bonCommande BonCommande?        @relation(fields: [bonCommandeId], references: [id], onDelete: SetNull)
+  client      Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  devis       Devis?              @relation(fields: [devisId], references: [id], onDelete: SetNull)
+  facture     Facture?            @relation(fields: [factureId], references: [id], onDelete: SetNull)
+  lignes      LigneBonLivraison[]
+
+  @@index([factureId])
+  @@index([clientId])
+  @@index([bonCommandeId])
+}
+
+model LigneBonLivraison {
+  id             String  @id @default(cuid())
+  bonLivraisonId String
+  pieceId        String?
+  designation    String  @default("")
+  quantite       Int
+
+  bonLivraison BonLivraison @relation(fields: [bonLivraisonId], references: [id], onDelete: Cascade)
+  piece        Piece?       @relation(fields: [pieceId], references: [id], onDelete: Restrict)
+
+  @@index([bonLivraisonId])
+}
+
+model Facture {
+  id                   String        @id @default(cuid())
+  /// Attribué à l'émission : un brouillon n'a pas de numéro (numérotation continue, sans trou).
+  numero               String?       @unique
+  devisId              String?       @unique
+  userId               String?
+  clientId             String
+  statut               StatutFacture @default(EMISE)
+  dateEmission         DateTime      @default(now())
+  dateEcheance         DateTime
+  remisePro            Decimal       @default(0) @db.Decimal(5, 2)
+  /// Remise globale : saisie (euros ou %), base de calcul (HT ou TTC) et montant déduit sur cette base.
+  remiseGlobaleType    TypeRemise?
+  remiseGlobaleBase    BaseRemise?
+  remiseGlobaleValeur  Decimal       @default(0) @db.Decimal(10, 2)
+  remiseGlobaleMontant Decimal       @default(0) @db.Decimal(10, 2)
+  /// Total HT avant remise globale (null = pas de remise globale).
+  totalHTAvantRemise   Decimal?      @db.Decimal(10, 2)
+  /// Mode de règlement prévu : « Virement » fait apparaître l'IBAN / BIC du garage sur le PDF.
+  modePaiement         ModePaiement?
+  /// Facture saisie directement (sans devis ni bon de livraison) : ses pièces ont décrémenté le stock.
+  manuelle             Boolean       @default(false)
+  totalHT              Decimal       @db.Decimal(10, 2)
+  totalTVA             Decimal       @db.Decimal(10, 2)
+  totalTTC             Decimal       @db.Decimal(10, 2)
+  montantPaye          Decimal       @default(0) @db.Decimal(10, 2)
+  /// Kilométrage du véhicule à la fin des travaux (mention obligatoire).
+  kilometrage          Int?
+  facturXUrl           String?
+  statutPA             String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  devis         Devis?           @relation(fields: [devisId], references: [id], onDelete: Restrict)
+  user          User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  client        Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  lignes        LigneFacture[]
+  paiements     Paiement[]
+  bonsLivraison BonLivraison[]
+  relances      RelanceFacture[]
+
+  @@index([clientId])
+  @@index([statut])
+  @@index([dateEcheance])
+}
+
+model LigneFacture {
+  id              String    @id @default(cuid())
+  factureId       String
+  type            TypeLigne
+  designation     String
+  quantite        Decimal   @db.Decimal(10, 2)
+  prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  prixCatalogueHT Decimal?  @db.Decimal(10, 2)
+  tvaRate         Decimal   @db.Decimal(5, 2)
+  totalHT         Decimal   @db.Decimal(10, 2)
+  prixAchatHT     Decimal?  @db.Decimal(10, 2)
+  pieceId         String?
+  /// Pièces comprises dans un forfait (copie de la ligne de devis).
+  composition     Json?
+  position        Int       @default(0)
+
+  facture Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+
+  @@index([factureId])
+  @@index([pieceId])
+}
+
+model Paiement {
+  id           String       @id @default(cuid())
+  factureId    String
+  montant      Decimal      @db.Decimal(10, 2)
+  mode         ModePaiement
+  datePaiement DateTime     @default(now())
+  nombreFois   Int?
+  reference    String?
+
+  facture Facture @relation(fields: [factureId], references: [id], onDelete: Restrict)
+
+  @@index([factureId])
+}
+
+model RendezVous {
+  id         String    @id @default(cuid())
+  clientId   String
+  vehiculeId String
+  userId     String
+  devisId    String?
+  debut      DateTime
+  fin        DateTime
+  motif      String?
+  statut     StatutRdv @default(PLANIFIE)
+  createdAt  DateTime  @default(now())
+
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicule Vehicule @relation(fields: [vehiculeId], references: [id], onDelete: Restrict)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  devis    Devis?   @relation(fields: [devisId], references: [id], onDelete: SetNull)
+
+  @@index([userId, debut, fin])
+  @@index([debut])
+  @@index([devisId])
+}
+
+model Tarif {
+  id          String    @id @default(cuid())
+  type        TypeTarif
+  libelle     String
+  description String?
+  montantHT   Decimal   @db.Decimal(10, 2)
+  actif       Boolean   @default(true)
+
+  pieces      TarifPiece[]
+  lignesDevis LigneDevis[]
+
+  @@index([type])
+}
+
+/// Pièce comprise dans un forfait : décrémentée du stock quand le forfait est utilisé dans un devis validé.
+model TarifPiece {
+  id       String @id @default(cuid())
+  tarifId  String
+  pieceId  String
+  quantite Int    @default(1)
+
+  tarif Tarif @relation(fields: [tarifId], references: [id], onDelete: Cascade)
+  piece Piece @relation(fields: [pieceId], references: [id], onDelete: Restrict)
+
+  @@unique([tarifId, pieceId])
+  @@index([pieceId])
+}
+
+/// Relance d'une facture impayée (traçabilité : date et auteur).
+model RelanceFacture {
+  id        String   @id @default(cuid())
+  factureId String
+  userId    String?
+  date      DateTime @default(now())
+
+  facture Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([factureId])
+}
+
+model MessageLog {
+  id           String        @id @default(cuid())
+  clientId     String?
+  canal        CanalMessage
+  template     String
+  statut       StatutMessage
+  contenu      String?
+  destinataire String?
+  erreur       String?
+  cle          String?       @unique
+  envoyeLe     DateTime      @default(now())
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([envoyeLe])
+}
+
+model Campagne {
+  id              String       @id @default(cuid())
+  nom             String
+  type            TypeCampagne
+  template        String
+  actif           Boolean      @default(true)
+  declencheur     String?
+  joursAvant      Int?
+  canal           CanalMessage @default(SMS)
+  // Campagnes manuelles (e-mails promotionnels)
+  sujet           String?
+  contenu         String?
+  audience        String       @default("TOUS")
+  envoyeeLe       DateTime?
+  nbDestinataires Int          @default(0)
+  nbEnvoyes       Int          @default(0)
+  nbEchecs        Int          @default(0)
+  createdAt       DateTime     @default(now())
+}
+
+model ParametreGarage {
+  id                   Int     @id @default(1)
+  nomGarage            String
+  adresse              String
+  telephone            String
+  email                String
+  siret                String
+  tvaNumber            String
+  horaires             Json
+  prefixDevis          String  @default("DEV")
+  prefixFacture        String  @default("FAC")
+  prefixOrdre          String  @default("OR")
+  prefixBonCommande    String  @default("BC")
+  prefixBonLivraison   String  @default("BL")
+  retentionClientsAns  Int     @default(5)
+  retentionMessagesAns Int     @default(3)
+  iban                 String?
+  bic                  String?
+  /// Clé de stockage du logo (PNG ou JPEG), affiché en en-tête des PDF.
+  logoUrl              String?
+}
+
+model Compteur {
+  type   String
+  annee  Int
+  valeur Int    @default(0)
+
+  @@id([type, annee])
+}
+
+model TentativeConnexion {
+  cle          String   @id
+  compte       Int      @default(0)
+  debutFenetre DateTime @default(now())
+}
+
+/// Modèle paramétrable (administrateur) : points copiés dans chaque fiche de contrôle à sa création.
+model PointControle {
+  id       String  @id @default(cuid())
+  libelle  String
+  position Int     @default(0)
+  isActive Boolean @default(true)
+}
+
+model FicheControle {
+  id           String      @id @default(cuid())
+  ordreId      String      @unique
+  statut       StatutFiche @default(EN_COURS)
+  remarques    String?
+  valideeLe    DateTime?
+  valideeParId String?
+  traiteeLe    DateTime?
+  traiteeParId String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  ordre      OrdreReparation @relation(fields: [ordreId], references: [id], onDelete: Cascade)
+  valideePar User?           @relation("FicheValidee", fields: [valideeParId], references: [id], onDelete: SetNull)
+  traiteePar User?           @relation("FicheTraitee", fields: [traiteeParId], references: [id], onDelete: SetNull)
+  points     PointFiche[]
+
+  @@index([statut])
+}
+
+/// Copie du libellé du modèle au moment de la création : modifier le modèle ne change pas les fiches existantes.
+model PointFiche {
+  id       String           @id @default(cuid())
+  ficheId  String
+  libelle  String
+  position Int              @default(0)
+  resultat ResultatControle @default(NON_VERIFIE)
+
+  fiche FicheControle @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+
+  @@index([ficheId])
+}

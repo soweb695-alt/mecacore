@@ -1,0 +1,24 @@
+# Tâches planifiées : appellent les routes /api/cron/* protégées par CRON_SECRET.
+# Secrets GitHub à créer : APP_URL (https://votre-domaine) et CRON_SECRET.
+name: Tâches planifiées
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # lundi 06:00 UTC : récapitulatif des impayés
+    - cron: "0 6 * * *"   # tous les jours 06:00 UTC : rappels de rendez-vous
+    - cron: "0 3 1 * *"   # le 1er du mois : purge RGPD
+  workflow_dispatch:
+
+jobs:
+  appel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Impayés (lundi)
+        if: github.event.schedule == '0 6 * * 1' || github.event_name == 'workflow_dispatch'
+        run: curl --fail --silent --show-error -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/impayes"
+      - name: Rappels de rendez-vous (quotidien)
+        if: github.event.schedule == '0 6 * * *' || github.event_name == 'workflow_dispatch'
+        run: curl --fail --silent --show-error -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/rappels-rdv"
+      - name: Purge RGPD (mensuel)
+        if: github.event.schedule == '0 3 1 * *' || github.event_name == 'workflow_dispatch'
+        run: curl --fail --silent --show-error -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.APP_URL }}/api/cron/retention"
