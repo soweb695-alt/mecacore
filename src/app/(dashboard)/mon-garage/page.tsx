@@ -33,7 +33,7 @@ export default async function MonGaragePage() {
             <CardDescription>Affiché à gauche de l&apos;en-tête des PDF.</CardDescription>
           </CardHeader>
           <CardContent>
-            <LogoUpload version={g?.logoUrl ?? null} />
+            <LogoUpload version={g?.logoMaj?.toISOString() ?? g?.logoUrl ?? null} />
           </CardContent>
         </Card>
         <Card>

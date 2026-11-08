@@ -18,10 +18,6 @@ export interface PenurieStock {
   disponible: number;
 }
 
-function stockInsuffisant(penuries: PenurieStock[]) {
-  return new ApiError(409, "Stock insuffisant pour valider ce devis", "STOCK_INSUFFISANT", penuries);
-}
-
 /** Quantités demandées par pièce : lignes PIECE liées au stock + pièces comprises dans les forfaits (× quantité du forfait). */
 export function quantitesParPiece(lignes: { type: TypeLigne | string; pieceId?: string | null; quantite: number; composition?: unknown }[]): Map<string, number> {
   const m = new Map<string, number>();
@@ -64,8 +60,13 @@ export function calculerPenuries(
   return out;
 }
 
-async function verifierStock(tx: Tx, demandes: Map<string, number>) {
-  if (demandes.size === 0) return;
+/**
+ * Vérifie que les pièces du devis existent et sont actives, et renvoie les pénuries éventuelles.
+ * Un stock insuffisant n'est PAS bloquant : le devis peut être enregistré et validé (le stock devient alors négatif,
+ * ce qui matérialise les pièces dues) ; l'interface affiche une alerte.
+ */
+async function verifierStock(tx: Tx, demandes: Map<string, number>): Promise<PenurieStock[]> {
+  if (demandes.size === 0) return [];
   const pieces = await tx.piece.findMany({
     where: { id: { in: [...demandes.keys()] } },
     select: { id: true, reference: true, nom: true, stock: true, isActive: true },
@@ -73,8 +74,16 @@ async function verifierStock(tx: Tx, demandes: Map<string, number>) {
   if (pieces.length !== demandes.size || pieces.some((p) => !p.isActive)) {
     throw new ApiError(400, "Une pièce du devis n'existe plus ou est désactivée", "PIECE_INTROUVABLE");
   }
-  const penuries = calculerPenuries(demandes, pieces);
-  if (penuries.length) throw stockInsuffisant(penuries);
+  return calculerPenuries(demandes, pieces);
+}
+
+/** Pénuries d'un devis enregistré (alerte avant validation). */
+export async function penuriesDevis(id: string): Promise<PenurieStock[]> {
+  const lignes = await db.ligneDevis.findMany({ where: { devisId: id }, select: { type: true, pieceId: true, quantite: true, composition: true } });
+  const demandes = quantitesParPiece(lignes.map((l) => ({ ...l, quantite: Number(l.quantite) })));
+  if (demandes.size === 0) return [];
+  const pieces = await db.piece.findMany({ where: { id: { in: [...demandes.keys()] } }, select: { id: true, reference: true, nom: true, stock: true } });
+  return calculerPenuries(demandes, pieces);
 }
 
 async function preparer(tx: Tx, input: DevisInput) {
@@ -96,13 +105,13 @@ async function preparer(tx: Tx, input: DevisInput) {
       },
     });
   }
-  // Une pièce ne peut être ajoutée au devis que si la quantité demandée est en stock (pièces des forfaits comprises).
+  // Pièces (et pièces des forfaits) : doivent exister ; un stock insuffisant est signalé mais ne bloque pas.
   const compos = await compositions(tx, input);
-  await verifierStock(tx, quantitesParPiece(input.lignes.map((l, i) => ({ ...l, composition: compos.get(i) }))));
+  const penuries = await verifierStock(tx, quantitesParPiece(input.lignes.map((l, i) => ({ ...l, composition: compos.get(i) }))));
 
   const totaux = calculerTotaux(input.lignes);
   const remisePro = client.type === "PRO" ? Number(client.discountRate) : 0;
-  return { client, totaux, remisePro, compos };
+  return { client, totaux, remisePro, compos, penuries };
 }
 
 function lignesData(input: DevisInput, compos: Map<number, PieceComprise[]>) {
@@ -129,7 +138,7 @@ function dateValidite(input: DevisInput): Date {
 
 export async function creerDevis(userId: string, input: DevisInput) {
   return db.$transaction(async (tx) => {
-    const { totaux, remisePro, compos } = await preparer(tx, input);
+    const { totaux, remisePro, compos, penuries } = await preparer(tx, input);
     const numero = await prochainNumero(tx, "DEVIS");
     const devis = await tx.devis.create({
       data: {
@@ -141,12 +150,13 @@ export async function creerDevis(userId: string, input: DevisInput) {
         statut: "BROUILLON", // « Envoyé » seulement après un envoi par e-mail réussi
         kilometrage: input.kilometrage ?? null,
         dateValidite: dateValidite(input),
+        priseEnCompteSeuil: input.priseEnCompteSeuil ?? true,
         remisePro,
         ...totaux,
         lignes: { create: lignesData(input, compos) },
       },
     });
-    return { id: devis.id, numero };
+    return { id: devis.id, numero, statut: devis.statut, penuries };
   });
 }
 
@@ -155,7 +165,7 @@ export async function modifierDevis(id: string, input: DevisInput) {
     const existant = await tx.devis.findUnique({ where: { id }, select: { statut: true } });
     if (!existant) throw new ApiError(404, "Devis introuvable", "INTROUVABLE");
     if (existant.statut !== "ENVOYE" && existant.statut !== "BROUILLON") throw new ApiError(409, "Un devis validé ou rejeté ne peut plus être modifié", "STATUT_INVALIDE");
-    const { totaux, remisePro, compos } = await preparer(tx, input);
+    const { totaux, remisePro, compos, penuries } = await preparer(tx, input);
     await tx.ligneDevis.deleteMany({ where: { devisId: id } });
     await tx.devis.update({
       where: { id },
@@ -165,12 +175,16 @@ export async function modifierDevis(id: string, input: DevisInput) {
         vehiculeId: input.vehiculeId ?? null,
         kilometrage: input.kilometrage ?? null,
         dateValidite: dateValidite(input),
+        ...(input.priseEnCompteSeuil !== undefined ? { priseEnCompteSeuil: input.priseEnCompteSeuil } : {}),
+        // « Enregistrer en brouillon » : un devis déjà envoyé puis modifié repasse en brouillon (à renvoyer au client).
+        ...(input.brouillon ? { statut: "BROUILLON" as const } : {}),
         remisePro,
         ...totaux,
         lignes: { create: lignesData(input, compos) },
       },
     });
-    return { id };
+    const { statut } = await tx.devis.findUniqueOrThrow({ where: { id }, select: { statut: true } });
+    return { id, statut, penuries };
   });
 }
 
@@ -186,11 +200,11 @@ export interface ValidationInput {
 
 /**
  * Validation transactionnelle (tout ou rien) :
- *  1. contrôle du stock de chaque pièce → 409 + détail si insuffisant ;
- *  2. décrémentation atomique du stock, puis bon de commande automatique pour les pièces au seuil d'alerte ;
+ *  1. passage du devis en VALIDE en premier (verrouille la ligne : une seule validation concurrente aboutit) ;
+ *  2. décrémentation du stock, même s'il est insuffisant (le stock devient négatif ; les pénuries sont renvoyées
+ *     pour affichage), puis bon de commande automatique pour les pièces au seuil d'alerte si le devis prend le seuil en compte ;
  *  3. devis mécanique : rendez-vous au planning (technicien + créneau obligatoires, conflit → refus) et création de l'OR ;
- *     devis pièces : création du bon de livraison « en attente » ;
- *  4. passage du devis en VALIDE.
+ *     devis pièces : création du bon de livraison « en attente ».
  */
 export async function validerDevis(id: string, input: ValidationInput = {}) {
   return db.$transaction(async (tx) => {
@@ -207,19 +221,17 @@ export async function validerDevis(id: string, input: ValidationInput = {}) {
       if (!m || !m.isActive || m.role !== "MECANICIEN") throw new ApiError(400, "Technicien invalide", "MECANICIEN_INVALIDE");
     }
 
-    const demandes = quantitesParPiece(devis.lignes.map((l) => ({ type: l.type, pieceId: l.pieceId, quantite: Number(l.quantite), composition: l.composition })));
-    await verifierStock(tx, demandes);
+    const r = await tx.devis.updateMany({ where: { id, statut: { in: ["ENVOYE", "BROUILLON"] } }, data: { statut: "VALIDE" } });
+    if (r.count === 0) throw new ApiError(409, "Ce devis a déjà été traité", "STATUT_INVALIDE");
 
-    // Décrémentation atomique conditionnelle (ordre déterministe : pas d'interblocage).
+    const demandes = quantitesParPiece(devis.lignes.map((l) => ({ type: l.type, pieceId: l.pieceId, quantite: Number(l.quantite), composition: l.composition })));
+    const penuries = await verifierStock(tx, demandes);
+
+    // Décrémentation atomique (ordre déterministe : pas d'interblocage). Le stock peut devenir négatif.
     for (const [pieceId, qte] of [...demandes.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-      const n = await tx.$executeRaw`UPDATE "Piece" SET stock = stock - ${qte}, "updatedAt" = NOW() WHERE id = ${pieceId} AND stock >= ${qte}`;
-      if (n === 0) {
-        // Stock consommé par une validation concurrente entre le contrôle et la mise à jour.
-        const p = await tx.piece.findUniqueOrThrow({ where: { id: pieceId }, select: { reference: true, nom: true, stock: true } });
-        throw stockInsuffisant([{ pieceId, reference: p.reference, nom: p.nom, demande: qte, disponible: p.stock }]);
-      }
+      await tx.$executeRaw`UPDATE "Piece" SET stock = stock - ${qte}, "updatedAt" = NOW() WHERE id = ${pieceId}`;
     }
-    const reappro = await verifierReapprovisionnement(tx, [...demandes.keys()]);
+    const reappro = devis.priseEnCompteSeuil ? await verifierReapprovisionnement(tx, [...demandes.keys()]) : [];
 
     let ordre: { id: string; numero: string } | null = null;
     let bonLivraison: { id: string; numero: string } | null = null;
@@ -260,9 +272,7 @@ export async function validerDevis(id: string, input: ValidationInput = {}) {
       }
     }
 
-    const r = await tx.devis.updateMany({ where: { id, statut: { in: ["ENVOYE", "BROUILLON"] } }, data: { statut: "VALIDE" } });
-    if (r.count === 0) throw new ApiError(409, "Ce devis a déjà été traité", "STATUT_INVALIDE");
-    return { id, ordre, bonLivraison, rdvId, reappro };
+    return { id, ordre, bonLivraison, rdvId, reappro, penuries };
   });
 }
 
@@ -301,7 +311,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       client: true,
       vehicule: true,
       user: { select: { firstName: true, lastName: true } },
-      lignes: { orderBy: { position: "asc" }, include: { piece: { select: { reference: true, prixAchatHT: true, stock: true } } } },
+      lignes: { orderBy: { position: "asc" }, include: { piece: { select: { reference: true, prixAchatHT: true, stock: true, seuilAlerte: true } } } },
       ordre: { select: { id: true, numero: true, statut: true } },
       facture: { select: { id: true, numero: true } },
       bonLivraison: { select: { id: true, numero: true, statut: true, factureId: true } },
@@ -324,6 +334,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       pieceId: l.pieceId,
       reference: l.piece?.reference ?? null,
       stock: l.piece?.stock ?? null,
+      seuilAlerte: l.piece?.seuilAlerte ?? null,
       tarifId: l.tarifId,
       piecesComprises: lireComposition(l.composition),
       ...(marges && achat !== null ? { prixAchatHT: achat, margeHT: Math.round((pu - achat) * Number(l.quantite) * 100) / 100 } : {}),
@@ -338,6 +349,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
     dateCreation: d.dateCreation,
     dateValidite: d.dateValidite,
     remisePro: Number(d.remisePro),
+    priseEnCompteSeuil: d.priseEnCompteSeuil,
     totalHT: Number(d.totalHT),
     totalTVA: Number(d.totalTVA),
     totalTTC: Number(d.totalTTC),

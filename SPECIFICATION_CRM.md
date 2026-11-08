@@ -73,7 +73,7 @@ Entités obligatoires (l'agent doit créer prisma/schema.prisma en respectant le
 - Calculs : totalHT = Σ(quantite × prixUnitaireHT) ; totalTVA = Σ(ligneHT × tvaRate / 100) ; totalTTC = totalHT + totalTVA. Arrondi 2 décimales.
 - Workflow : BROUILLON → ENVOYE → VALIDE | REJETE. Retour arrière interdit sauf Admin (REOUVRIR).
 - Validation d'un devis MECANIQUE (transaction atomique) :
-  1. Vérifier stock suffisant pour chaque pièce. Si insuffisant → rollback + erreur 409 avec détail.
+  1. Contrôler le stock de chaque pièce. Si insuffisant → alerte (détail renvoyé), **sans blocage** : le stock devient négatif.
   2. Décrémenter le stock.
   3. Créer l'OrdreReparation lié.
   4. Passer le devis en VALIDE.
@@ -224,7 +224,7 @@ Lot 8 — Conformité & finitions
 ## 11. CRITÈRES D'ACCEPTATION GLOBAUX
 
 - Tous les lots 1 à 8 implémentés et validés.
-- Un devis mécanique validé génère un OR ET décrémente le stock en une seule transaction (rollback si stock insuffisant).
+- Un devis mécanique validé génère un OR ET décrémente le stock en une seule transaction (un stock insuffisant est signalé mais n'empêche pas la validation).
 - Une pièce sous seuil affiche une alerte visuelle sur la liste stock et le dashboard.
 - Une facture émise est transmise à la Plateforme Agréée (ou mock) et son statut est tracé.
 - Un SMS de rappel RDV et un SMS « commande prête » sont envoyés et tracés dans MessageLog.

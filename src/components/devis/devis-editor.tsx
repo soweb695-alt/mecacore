@@ -1,11 +1,12 @@
 "use client";
 
-import { Car, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, Car, Loader2, PackagePlus, Save, Send, Trash2, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ClientForm, type ClientCree } from "@/components/clients/client-form";
 import { VehiculeForm, type VehiculeSaved } from "@/components/clients/vehicule-form";
+import { NouvellePieceDialog, type PieceCreee } from "@/components/devis/nouvelle-piece-dialog";
 import { SearchPicker } from "@/components/devis/search-picker";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
@@ -25,10 +26,15 @@ interface LigneState {
   type: TypeLigne;
   designation: string;
   quantite: string;
+  /** Prix unitaire HT : c'est lui qui est enregistré en base. */
   prixUnitaireHT: string;
+  /** Prix unitaire TTC affiché et saisi à l'écran ; le HT en est déduit (arrondi au centime). */
+  prixTTC: string;
   tvaRate: string;
   pieceId: string | null;
   stock: number | null;
+  /** Seuil d'alerte de la pièce du stock (alerte si le devis fait passer le stock dessous). */
+  seuilAlerte?: number | null;
   prixAchatHT?: number;
   /** Prix catalogue de la pièce avant réduction professionnelle (sert au recalcul et à la traçabilité). */
   prixCatalogueHT: number | null;
@@ -65,7 +71,8 @@ export interface DevisInitial {
   kilometrage: number | null;
   prochainCT: string;
   dateValidite: string;
-  lignes: Omit<LigneState, "key">[];
+  priseEnCompteSeuil?: boolean;
+  lignes: Omit<LigneState, "key" | "prixTTC">[];
 }
 
 interface Tarif {
@@ -82,6 +89,7 @@ interface PieceHit {
   nom: string;
   prixVenteHT: number;
   stock: number;
+  seuilAlerte?: number;
   prixAchatHT?: number;
   /** Référence croisée saisie : la pièce en est l'équivalent (référence principale = `reference`). */
   referenceCroisee?: string | null;
@@ -106,16 +114,22 @@ const TYPE_LABEL: Record<TypeLigne, string> = { MAIN_OEUVRE: "Main d'œuvre", FO
 let compteur = 0;
 const nouvelleCle = () => `l${++compteur}`;
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(",", ".")));
+/** TVA par défaut des lignes (taux normal). */
+const TVA = 20;
+const versTTC = (ht: number, taux: number) => round2(ht * (1 + taux / 100));
+const versHT = (ttc: number, taux: number) => round2(ttc / (1 + taux / 100));
+/** Prix HT fixé par le programme (catalogue, tarif, remise) : le prix TTC affiché suit. */
+const avecHT = (ht: number, taux: number) => ({ prixUnitaireHT: String(ht), prixTTC: String(versTTC(ht, taux)) });
 const nomClientHit = (c: ClientHit) => (c.type === "PRO" && c.companyName ? c.companyName : [c.firstName, c.lastName].filter(Boolean).join(" "));
 /** Réduction professionnelle : recalcule les seules lignes « Pièce » du stock dont le prix n'a pas été modifié à la main. */
 function reappliquerRemise(lignes: LigneState[], taux: number): LigneState[] {
   return lignes.map((l) =>
-    l.type === "PIECE" && l.pieceId && l.prixCatalogueHT !== null && !l.prixManuel ? { ...l, prixUnitaireHT: String(appliquerRemisePro(l.prixCatalogueHT, taux)) } : l,
+    l.type === "PIECE" && l.pieceId && l.prixCatalogueHT !== null && !l.prixManuel ? { ...l, ...avecHT(appliquerRemisePro(l.prixCatalogueHT, taux), num(l.tvaRate)) } : l,
   );
 }
 const libelleVehicule = (v: Pick<VehiculeLite, "marque" | "modele" | "immatriculation">) => `${v.marque} ${v.modele} · ${v.immatriculation}`;
 
-export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisInitial; tarifs: Tarif[]; voirMarges: boolean }) {
+export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, statut }: { initial: DevisInitial; tarifs: Tarif[]; voirMarges: boolean; voirAchat?: boolean; statut?: "BROUILLON" | "ENVOYE" }) {
   const router = useRouter();
   const [type, setType] = useState(initial.type);
   const [client, setClient] = useState(initial.client);
@@ -126,8 +140,10 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
   const [nouveauVehicule, setNouveauVehicule] = useState(false);
   const [nouveauClient, setNouveauClient] = useState(false);
   const [dateValidite, setDateValidite] = useState(initial.dateValidite);
-  const [lignes, setLignes] = useState<LigneState[]>(initial.lignes.map((l) => ({ ...l, key: nouvelleCle() })));
-  const [saving, setSaving] = useState(false);
+  const [lignes, setLignes] = useState<LigneState[]>(initial.lignes.map((l) => ({ ...l, key: nouvelleCle(), prixTTC: String(versTTC(num(l.prixUnitaireHT), num(l.tvaRate))) })));
+  const [seuil, setSeuil] = useState(initial.priseEnCompteSeuil ?? true);
+  const [nouvellePiece, setNouvellePiece] = useState(false);
+  const [saving, setSaving] = useState<"brouillon" | "envoi" | null>(null);
 
   const remise = client?.type === "PRO" ? client.discountRate : 0;
   const clientId = client?.id;
@@ -164,7 +180,16 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
     for (const l of lignes) if (l.pieceId) m.set(l.pieceId, (m.get(l.pieceId) ?? 0) + num(l.quantite));
     return m;
   }, [lignes]);
-  const horsStock = lignes.filter((l) => l.pieceId && l.stock !== null && (demandes.get(l.pieceId) ?? 0) > l.stock);
+  /** Alerte de stock d'une ligne (non bloquante) : rupture, ou passage sous le seuil d'alerte si l'option est cochée. */
+  const alerteStock = (l: LigneState): { niveau: "rupture" | "seuil"; texte: string } | null => {
+    if (!l.pieceId || l.stock === null) return null;
+    const reste = l.stock - (demandes.get(l.pieceId) ?? 0);
+    if (reste < 0) return { niveau: "rupture", texte: `Stock insuffisant : ${l.stock} disponible, il manquera ${-reste} pièce${reste < -1 ? "s" : ""}` };
+    if (seuil && l.seuilAlerte != null && l.seuilAlerte > 0 && reste <= l.seuilAlerte) return { niveau: "seuil", texte: `Stock restant après ce devis : ${reste} (seuil d'alerte : ${l.seuilAlerte})` };
+    return null;
+  };
+  const horsStock = lignes.filter((l) => alerteStock(l)?.niveau === "rupture");
+  const sousSeuil = lignes.filter((l) => alerteStock(l)?.niveau === "seuil");
 
   const marge = useMemo(() => {
     if (!voirMarges) return null;
@@ -180,7 +205,7 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
   }
 
   function ajouterLibre(t: TypeLigne) {
-    setLignes((ls) => [...ls, { key: nouvelleCle(), type: t, designation: "", quantite: "1", prixUnitaireHT: "0", tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true }]);
+    setLignes((ls) => [...ls, { key: nouvelleCle(), type: t, designation: "", quantite: "1", ...avecHT(0, TVA), tvaRate: String(TVA), pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true }]);
   }
 
   function ajouterTarif(t: TypeLigne, tarifId: string) {
@@ -188,16 +213,26 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
     if (!tarif) return;
     setLignes((ls) => [
       ...ls,
-      { key: nouvelleCle(), type: t, designation: tarif.libelle, quantite: "1", prixUnitaireHT: String(tarif.montantHT), tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true, tarifId: t === "FORFAIT" ? tarif.id : null, piecesComprises: t === "FORFAIT" ? tarif.pieces : undefined },
+      { key: nouvelleCle(), type: t, designation: tarif.libelle, quantite: "1", ...avecHT(tarif.montantHT, TVA), tvaRate: String(TVA), pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true, tarifId: t === "FORFAIT" ? tarif.id : null, piecesComprises: t === "FORFAIT" ? tarif.pieces : undefined },
     ]);
   }
 
-  function ajouterPiece(p: PieceHit) {
+  function ajouterPiece(p: PieceHit | PieceCreee) {
     const pu = appliquerRemisePro(p.prixVenteHT, remise);
     setLignes((ls) => [
       ...ls,
-      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", prixUnitaireHT: String(pu), tvaRate: "20", pieceId: p.id, stock: p.stock, prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
+      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(pu, TVA), tvaRate: String(TVA), pieceId: p.id, stock: p.stock, seuilAlerte: p.seuilAlerte ?? null, prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
     ]);
+  }
+
+  /** Saisie du prix TTC : le HT enregistré en est déduit. */
+  function majTTC(l: LigneState, v: string) {
+    maj(l.key, { prixTTC: v, prixUnitaireHT: String(versHT(num(v), num(l.tvaRate))), prixManuel: true });
+  }
+
+  /** Changement de TVA : le prix TTC saisi est conservé, le HT est recalculé. */
+  function majTVA(l: LigneState, v: string) {
+    maj(l.key, { tvaRate: v, prixUnitaireHT: String(versHT(num(l.prixTTC), num(v))) });
   }
 
   function selectionnerVehicule(v: VehiculeLite | null) {
@@ -243,7 +278,8 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
     selectionnerVehicule(v);
   }
 
-  async function enregistrer() {
+  /** Enregistre le devis. « Brouillon » : statut Brouillon. « Envoi » : enregistre puis envoie le PDF au client par e-mail. */
+  async function enregistrer(mode: "brouillon" | "envoi") {
     const payload = {
       type,
       clientId: client?.id ?? "",
@@ -251,6 +287,8 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
       kilometrage: kilometrage.trim() === "" ? null : Number(kilometrage),
       prochainCT: prochainCT || null,
       dateValidite,
+      priseEnCompteSeuil: seuil,
+      brouillon: mode === "brouillon",
       lignes: lignes.map((l) => ({
         type: l.type,
         designation: l.designation,
@@ -265,23 +303,34 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
     if (!client) return void toast.error("Sélectionnez un client.");
     const parsed = devisSchema.safeParse(payload);
     if (!parsed.success) return void toast.error(parsed.error.issues[0]?.message ?? "Devis invalide");
-    if (horsStock.length) return void toast.error("Stock insuffisant pour au moins une pièce.");
-    setSaving(true);
+    // Stock insuffisant : alerte seulement, l'enregistrement n'est pas bloqué.
+    if (horsStock.length) toast.warning("Attention : stock insuffisant pour au moins une pièce. Le devis est enregistré quand même.");
+    setSaving(mode);
+    let id = initial.id;
     try {
-      if (initial.id) {
-        await api(`/api/devis/${initial.id}`, "PATCH", parsed.data);
-        toast.success("Devis enregistré");
-        router.refresh();
+      if (id) {
+        await api(`/api/devis/${id}`, "PATCH", parsed.data);
       } else {
         const r = await api<{ id: string; numero: string }>("/api/devis", "POST", parsed.data);
-        toast.success(`Devis ${r.numero} créé et envoyé`);
-        router.push(`/devis/${r.id}`);
+        id = r.id;
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
-    } finally {
-      setSaving(false);
+      setSaving(null);
+      return void toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
     }
+    if (mode === "brouillon") {
+      toast.success("Devis enregistré en brouillon");
+    } else {
+      try {
+        await api(`/api/devis/${id}/envoyer`, "POST");
+        toast.success("Devis enregistré et envoyé au client par e-mail");
+      } catch (e) {
+        toast.error(`Devis enregistré, mais non envoyé : ${e instanceof Error ? e.message : "erreur inconnue"}`);
+      }
+    }
+    setSaving(null);
+    if (initial.id) router.refresh();
+    else router.push(`/devis/${id}`);
   }
 
   const tarifsDe = (t: TypeLigne) => tarifs.filter((x) => (t === "MAIN_OEUVRE" ? x.type.startsWith("MO") : x.type === t));
@@ -402,7 +451,7 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
                 <option value="">+ {TYPE_LABEL[t]}</option>
                 {tarifsDe(t).map((x) => (
                   <option key={x.id} value={x.id}>
-                    {x.libelle} ({formatEUR(x.montantHT)})
+                    {x.libelle} ({formatEUR(versTTC(x.montantHT, TVA))} TTC)
                   </option>
                 ))}
                 <option value="__libre">Ligne libre…</option>
@@ -411,7 +460,8 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="max-w-md">
+          <div className="flex max-w-2xl flex-wrap items-start gap-2">
+            <div className="min-w-0 flex-1">
             <SearchPicker<PieceHit>
               label="Ajouter une pièce du stock"
               placeholder="Ajouter une pièce (référence, nom, pneu…)"
@@ -424,13 +474,32 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
                     {p.referenceCroisee && <span className="block text-xs text-muted-foreground">Équivalent de {p.referenceCroisee}</span>}
                   </span>
                   <span className={p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}>
-                    {formatEUR(p.prixVenteHT)} · stock {p.stock}
+                    {formatEUR(versTTC(p.prixVenteHT, TVA))} TTC · stock {p.stock}
                   </span>
                 </span>
               )}
               onPick={ajouterPiece}
             />
+            </div>
+            <Button type="button" variant="outline" onClick={() => setNouvellePiece(true)}>
+              <PackagePlus aria-hidden />
+              Nouvelle pièce
+            </Button>
           </div>
+          <label className="flex w-fit items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-primary" checked={seuil} onChange={(e) => setSeuil(e.target.checked)} />
+            Prendre en compte le seuil d&apos;alerte des pièces
+            <span className="text-xs text-muted-foreground">(alerte ici et bon de commande automatique à la validation)</span>
+          </label>
+          {(horsStock.length > 0 || sousSeuil.length > 0) && (
+            <div role="status" className="flex gap-2 rounded-lg bg-warning-bg px-3 py-2 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>
+                {horsStock.length > 0 && <>Stock insuffisant pour {horsStock.length} pièce{horsStock.length > 1 ? "s" : ""} : le devis peut quand même être enregistré et validé (le stock deviendra négatif). </>}
+                {sousSeuil.length > 0 && <>{sousSeuil.length} pièce{sousSeuil.length > 1 ? "s passeront" : " passera"} sous le seuil d&apos;alerte.</>}
+              </p>
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -439,10 +508,10 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
                   <th className="rounded-l-lg px-2 py-2 font-medium">Type</th>
                   <th className="px-2 py-2 font-medium">Désignation</th>
                   <th className="w-20 px-2 py-2 font-medium">Qté</th>
-                  <th className="w-28 px-2 py-2 font-medium">PU HT</th>
+                  <th className="w-28 px-2 py-2 font-medium">PU TTC</th>
                   <th className="w-20 px-2 py-2 font-medium">TVA %</th>
-                  <th className="w-28 px-2 py-2 text-right font-medium">Total HT</th>
-                  {voirMarges && <th className="w-24 px-2 py-2 text-right font-medium">Marge</th>}
+                  <th className="w-28 px-2 py-2 text-right font-medium">Total TTC</th>
+                  {voirMarges && <th className="w-24 px-2 py-2 text-right font-medium">Marge HT</th>}
                   <th className="w-10 rounded-r-lg px-2 py-2" />
                 </tr>
               </thead>
@@ -455,14 +524,14 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
                   </tr>
                 )}
                 {lignes.map((l) => {
-                  const enRupture = l.pieceId && l.stock !== null && (demandes.get(l.pieceId) ?? 0) > l.stock;
+                  const alerte = alerteStock(l);
                   const m = l.type === "PIECE" && l.prixAchatHT !== undefined ? round2((num(l.prixUnitaireHT) - l.prixAchatHT) * num(l.quantite)) : null;
                   return (
                     <tr key={l.key} className="border-b align-top">
                       <td className="px-2 py-2 text-xs text-muted-foreground">{TYPE_LABEL[l.type]}</td>
                       <td className="px-2 py-1.5">
                         <Input aria-label="Désignation" value={l.designation} maxLength={200} onChange={(e) => maj(l.key, { designation: e.target.value })} />
-                        {enRupture && <p className="mt-1 text-xs text-destructive">Stock insuffisant (disponible : {l.stock})</p>}
+                        {alerte && <p className={alerte.niveau === "rupture" ? "mt-1 text-xs text-destructive" : "mt-1 text-xs text-warning"}>{alerte.texte}</p>}
                         {l.piecesComprises && l.piecesComprises.length > 0 && (
                           <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
                             Pièces comprises (déduites du stock à la validation) : {l.piecesComprises.map((p) => `${p.nom} (${p.reference}) × ${p.quantite}`).join(", ")}
@@ -473,17 +542,18 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
                         <Input aria-label="Quantité" inputMode="decimal" value={l.quantite} onChange={(e) => maj(l.key, { quantite: e.target.value })} />
                       </td>
                       <td className="px-2 py-1.5">
-                        <Input aria-label="Prix unitaire HT" inputMode="decimal" value={l.prixUnitaireHT} onChange={(e) => maj(l.key, { prixUnitaireHT: e.target.value, prixManuel: true })} />
+                        <Input aria-label="Prix unitaire TTC" inputMode="decimal" value={l.prixTTC} onChange={(e) => majTTC(l, e.target.value)} />
+                        <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{formatEUR(num(l.prixUnitaireHT))} HT</p>
                         {l.type === "PIECE" && l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: num(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT }) > 0 && (
                           <p className="mt-1 text-[11px] leading-tight text-success">
-                            Catalogue {formatEUR(l.prixCatalogueHT)} · remise {tauxRemiseLigne({ prixUnitaireHT: num(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT })} %
+                            Catalogue {formatEUR(versTTC(l.prixCatalogueHT, num(l.tvaRate)))} TTC · remise {tauxRemiseLigne({ prixUnitaireHT: num(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT })} %
                           </p>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
-                        <Input aria-label="Taux de TVA" inputMode="decimal" value={l.tvaRate} onChange={(e) => maj(l.key, { tvaRate: e.target.value })} />
+                        <Input aria-label="Taux de TVA" inputMode="decimal" value={l.tvaRate} onChange={(e) => majTVA(l, e.target.value)} />
                       </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatEUR(totalLigneHT({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT) }))}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{formatEUR(versTTC(totalLigneHT({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT) }), num(l.tvaRate)))}</td>
                       {voirMarges && <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{m === null ? "–" : formatEUR(m)}</td>}
                       <td className="px-1 py-1.5">
                         <Button type="button" variant="ghost" size="icon-sm" aria-label="Supprimer la ligne" onClick={() => setLignes((ls) => ls.filter((x) => x.key !== l.key))}>
@@ -524,11 +594,18 @@ export function DevisEditor({ initial, tarifs, voirMarges }: { initial: DevisIni
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Annuler
         </Button>
-        <Button type="button" onClick={enregistrer} disabled={saving}>
-          {saving ? <Loader2 className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
-          {initial.id ? "Enregistrer le devis" : "Créer le devis"}
+        <Button type="button" variant="outline" onClick={() => enregistrer("brouillon")} disabled={saving !== null}>
+          {saving === "brouillon" ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
+          Enregistrer en brouillon
+        </Button>
+        <Button type="button" onClick={() => enregistrer("envoi")} disabled={saving !== null}>
+          {saving === "envoi" ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+          {statut === "ENVOYE" ? "Enregistrer et renvoyer" : "Enregistrer et envoyer"}
         </Button>
       </div>
+      {statut === "ENVOYE" && <p className="text-right text-xs text-muted-foreground">Ce devis a déjà été envoyé : « Enregistrer en brouillon » le repasse en brouillon, à renvoyer au client.</p>}
+
+      <NouvellePieceDialog open={nouvellePiece} onOpenChange={setNouvellePiece} voirAchat={voirAchat} onCreee={ajouterPiece} />
 
       <Dialog open={nouveauClient} onOpenChange={setNouveauClient}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

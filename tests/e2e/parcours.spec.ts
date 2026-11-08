@@ -36,7 +36,7 @@ test("1. client → véhicule → devis → validation → OR créé et stock d�
   await page.getByRole("option", { name: /E2E-PLAQ/ }).click();
   await page.getByLabel("Quantité").nth(1).fill("3");
   await expect(page.getByText("Total TTC").first()).toBeVisible();
-  await page.getByRole("button", { name: "Créer le devis" }).click();
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
   await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
 
   // Le devis est créé en « Brouillon » ; il ne passe à « Envoyé » qu'après un envoi d'e-mail réussi.
@@ -168,7 +168,7 @@ test("5. devis de pièces → bon de livraison en attente ; seuil d'alerte → b
   await expect(page.getByText("Sophie Leroy").first()).toBeVisible();
   await page.getByLabel("Ajouter une pièce du stock").fill("E2E");
   await page.getByRole("option", { name: /E2E-PLAQ/ }).click();
-  await page.getByRole("button", { name: "Créer le devis" }).click();
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
   await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
   await page.getByRole("button", { name: "Valider le devis" }).click();
   await page.getByRole("button", { name: "Confirmer la validation" }).click();
@@ -257,10 +257,12 @@ test("10. client PRO : réduction automatique sur les pièces seulement (pas sur
   await page.getByRole("option", { name: "Garage Pro E2E" }).click();
   await page.getByLabel("Ajouter une pièce du stock").fill("E2E-IMPORT");
   await page.getByRole("option", { name: /E2E-IMPORT/ }).click();
-  await expect(page.getByLabel("Prix unitaire HT")).toHaveValue("17.91"); // 19,90 − 10 %
-  await expect(page.getByText(/Catalogue .*19,90.* remise 10 %/)).toBeVisible();
+  // Prix affichés en TTC : 19,90 HT − 10 % = 17,91 HT, soit 21,49 TTC (catalogue 23,88 TTC).
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("21.49");
+  await expect(page.getByText(/17,91.*HT/).first()).toBeVisible();
+  await expect(page.getByText(/Catalogue .*23,88.* TTC · remise 10 %/)).toBeVisible();
   await page.locator('select[aria-label="Ajouter : Forfait"]').selectOption("__libre");
-  await expect(page.getByLabel("Prix unitaire HT").nth(1)).toHaveValue("0");
+  await expect(page.getByLabel("Prix unitaire TTC").nth(1)).toHaveValue("0");
 });
 
 test("11. onglet Campagnes : le Magasin prépare une campagne e-mail", async ({ page }) => {
@@ -287,7 +289,7 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
   await page.getByLabel("Véhicule sélectionné").selectOption({ index: 1 });
   await page.getByLabel("Kilométrage").fill("84200");
   await page.locator('select[aria-label="Ajouter : Main d\'œuvre"]').selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Créer le devis" }).click();
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
   await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
   await page.getByRole("button", { name: "Valider le devis" }).click();
   const val = page.getByRole("dialog");
@@ -407,4 +409,43 @@ test("14. factures : export de la sélection (Excel et PDF groupé) ; onglet Rel
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Relances" }).click();
   await expect(page.getByRole("heading", { name: "Relances" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Nombre de relances" })).toBeVisible();
+});
+
+test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; puis un retour consigné rattaché au client", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/devis/nouveau");
+  await page.getByLabel("Type de devis").selectOption("PIECE");
+  await page.getByLabel("Rechercher un client", { exact: true }).fill("Sophie");
+  await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
+
+  await page.getByRole("button", { name: "Nouvelle pièce" }).click();
+  const d = page.getByRole("dialog");
+  await d.getByLabel("Référence").fill("E2E-RAPIDE");
+  await d.getByLabel("Nom").fill("Ampoule H7");
+  await d.getByLabel("Prix d'achat HT (€)").fill("3");
+  await d.getByLabel("Prix de vente HT (€)").fill("10");
+  await d.getByLabel("Stock initial").fill("1");
+  await d.getByRole("button", { name: "Créer et ajouter au devis" }).click();
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("12");
+
+  // Stock insuffisant : alerte visible, mais l'enregistrement n'est pas bloqué.
+  await page.getByLabel("Quantité").fill("3");
+  await expect(page.getByText(/il manquera 2 pièces/)).toBeVisible();
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
+  await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
+  await expect(page.getByText("Brouillon", { exact: true }).first()).toBeVisible();
+
+  // Retour consigné rattaché au client.
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Retours & Consignées" }).click();
+  await page.getByRole("button", { name: "Nouveau retour" }).click();
+  const r = page.getByRole("dialog");
+  await r.getByLabel("Type").selectOption("CONSIGNE");
+  await r.getByLabel("Désignation").fill("Étrier échange standard");
+  await r.getByLabel("Montant de la consigne HT (€)").fill("45");
+  await r.getByLabel("Rechercher un client").fill("Sophie");
+  await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
+  await r.getByRole("button", { name: "Créer" }).click();
+  await expect(page.getByText(/RET-\d{4}-0001 enregistré/)).toBeVisible();
+  await expect(page.getByRole("row", { name: /Étrier échange standard/ })).toContainText("Sophie Leroy");
+  await expect(page.getByText("45,00 €").first()).toBeVisible();
 });

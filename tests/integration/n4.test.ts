@@ -70,10 +70,11 @@ describe("forfaits : description et pièces comprises", () => {
     expect(await stock(b.p2.id)).toBe(5);
   });
 
-  it("refuse un forfait si ses pièces ne sont pas en stock, et une quantité non entière", async () => {
+  it("signale (sans bloquer) un forfait dont les pièces manquent, et refuse une quantité non entière", async () => {
     const tarifId = await forfaitVidange();
     const forfait = (quantite: number) => ({ type: "FORFAIT" as const, designation: "Vidange", quantite, prixUnitaireHT: 89, tvaRate: 20, tarifId });
-    await expect(creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [forfait(6)] })).rejects.toMatchObject({ code: "STOCK_INSUFFISANT" });
+    const r = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [forfait(6)] });
+    expect(r.penuries).toEqual([expect.objectContaining({ reference: "P2", demande: 6, disponible: 5 })]);
     await expect(creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [forfait(1.5)] })).rejects.toMatchObject({ code: "QUANTITE_INVALIDE" });
   });
 

@@ -9,7 +9,8 @@ export const pieceSchema = z.object({
   categorie: optStr(60),
   prixAchatHT: z.number().min(0, "Prix invalide").max(100000).optional(),
   prixVenteHT: z.number().min(0, "Prix invalide").max(100000),
-  stock: z.number().int("Nombre entier requis").min(0, "Stock invalide").max(100000),
+  /** Peut être négatif : un devis validé malgré un stock insuffisant laisse des pièces dues. */
+  stock: z.number().int("Nombre entier requis").min(-100000, "Stock invalide").max(100000),
   seuilAlerte: z.number().int("Nombre entier requis").min(0).max(100000),
   taillePneu: z
     .union([z.literal(""), z.string().trim().toUpperCase().regex(/^\d{3}\/\d{2} ?Z?R ?\d{2}$/, "Format attendu : 205/55 R16")])
@@ -18,6 +19,9 @@ export const pieceSchema = z.object({
 });
 
 export type PieceInput = z.infer<typeof pieceSchema>;
+
+/** Création d'une pièce : le stock initial ne peut pas être négatif. */
+export const pieceCreationSchema = pieceSchema.refine((p) => p.stock >= 0, { path: ["stock"], message: "Le stock initial ne peut pas être négatif" });
 
 export const pieceListQuery = z.object({
   q: z.string().trim().max(100).optional(),

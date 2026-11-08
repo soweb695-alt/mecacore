@@ -3,7 +3,7 @@ import { DevisEditor } from "@/components/devis/devis-editor";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
 import { dansJours, nomClient } from "@/lib/format";
-import { canSeeMargins } from "@/lib/permissions";
+import { canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
 import { tarifsActifs } from "@/lib/services/tarifs";
 import { requirePage } from "@/lib/session";
 
@@ -23,6 +23,7 @@ export default async function NouveauDevis({ searchParams }: { searchParams: Pro
       <PageHeader title="Nouveau devis" description="Le numéro est attribué à l'enregistrement." />
       <DevisEditor
         voirMarges={canSeeMargins(user)}
+        voirAchat={canSeePurchasePrice(user)}
         tarifs={tarifs}
         initial={{
           type: "MECANIQUE",

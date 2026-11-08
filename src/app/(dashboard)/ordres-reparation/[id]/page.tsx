@@ -39,6 +39,7 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
   if (!can(user, "read", "ordre", o.userId ?? "")) redirect("/ordres-reparation");
 
   const mecano = user.role === "MECANICIEN";
+  const retours = can(user, "read", "retour") ? await db.retourPiece.count({ where: { ordreId: o.id } }) : null;
   const mecaniciens = mecano ? [] : await db.user.findMany({ where: { role: "MECANICIEN", isActive: true }, select: { id: true, firstName: true, lastName: true } });
   const v = o.devis.vehicule;
   const fiche = await obtenirFiche(o.id);
@@ -69,6 +70,11 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
               {can(user, "read", "devis") && (
                 <Link href={`/devis/${o.devisId}`} className="inline-flex h-9 items-center rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
                   Voir le devis {o.devis.numero}
+                </Link>
+              )}
+              {retours !== null && (
+                <Link href={`/retours?ordreId=${o.id}`} className="inline-flex h-9 items-center rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
+                  Retours & consignées ({retours})
                 </Link>
               )}
             </>

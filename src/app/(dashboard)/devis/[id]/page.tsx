@@ -10,8 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { dateFR, eur, nomClient } from "@/lib/format";
-import { can, canSeeMargins } from "@/lib/permissions";
-import { lireDevis } from "@/lib/services/devis";
+import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
+import { lireDevis, penuriesDevis } from "@/lib/services/devis";
 import { montantRemise, tauxRemiseLigne } from "@/lib/remise";
 import { tarifsActifs } from "@/lib/services/tarifs";
 import { requirePage } from "@/lib/session";
@@ -26,10 +26,13 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
   if (!d) notFound();
   const marges = canSeeMargins(user);
   const modifiable = (d.statut === "ENVOYE" || d.statut === "BROUILLON") && can(user, "update", "devis");
-  const [mecaniciens, tarifs] = await Promise.all([
+  const enAttente = d.statut === "ENVOYE" || d.statut === "BROUILLON";
+  const [mecaniciens, tarifs, penuries] = await Promise.all([
     db.user.findMany({ where: { role: "MECANICIEN", isActive: true }, select: { id: true, firstName: true, lastName: true }, orderBy: { firstName: "asc" } }),
     modifiable ? tarifsActifs() : [],
+    enAttente ? penuriesDevis(d.id) : [],
   ]);
+  const ttc = (ht: number, taux: number) => Math.round(ht * (100 + taux)) / 100;
 
   const actions = (
     <>
@@ -48,6 +51,8 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
         droits={{ valider: can(user, "validate", "devis"), rouvrir: can(user, "delete", "devis"), modifier: can(user, "update", "devis") }}
         clientEmail={d.client.email}
         jourParDefaut={jourParis()}
+        penuries={penuries}
+        priseEnCompteSeuil={d.priseEnCompteSeuil}
       />
       {d.statut === "VALIDE" && !d.facture && !d.bonLivraison?.factureId && can(user, "create", "facture") && <CreerFactureButton devisId={d.id} totaux={{ totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) }} />}
     </>
@@ -73,6 +78,8 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
       {modifiable ? (
         <DevisEditor
           voirMarges={marges}
+          voirAchat={canSeePurchasePrice(user)}
+          statut={d.statut as "BROUILLON" | "ENVOYE"}
           tarifs={tarifs}
           initial={{
             id: d.id,
@@ -84,6 +91,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
             kilometrage: d.kilometrage ?? d.vehicule?.kilometrage ?? null,
             prochainCT: d.vehicule?.prochainCT ? d.vehicule.prochainCT.toISOString().slice(0, 10) : "",
             dateValidite: d.dateValidite.toISOString().slice(0, 10),
+            priseEnCompteSeuil: d.priseEnCompteSeuil,
             lignes: d.lignes.map((l) => ({
               type: l.type,
               designation: l.designation,
@@ -94,6 +102,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
               tarifId: l.tarifId,
               piecesComprises: l.piecesComprises,
               stock: l.stock,
+              seuilAlerte: l.seuilAlerte,
               prixAchatHT: l.prixAchatHT,
               // Sans prix catalogue enregistré : si aucune remise n'existait, le prix actuel est le prix catalogue.
               prixCatalogueHT: l.prixCatalogueHT ?? (l.type === "PIECE" && l.pieceId && d.remisePro === 0 ? l.prixUnitaireHT : null),
@@ -112,10 +121,10 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                 <TableRow>
                   <TableHead>Désignation</TableHead>
                   <TableHead className="text-right">Qté</TableHead>
-                  <TableHead className="text-right">PU HT</TableHead>
+                  <TableHead className="text-right">PU TTC</TableHead>
                   <TableHead className="text-right">TVA</TableHead>
-                  <TableHead className="text-right">Total HT</TableHead>
-                  {marges && <TableHead className="text-right">Marge</TableHead>}
+                  <TableHead className="text-right">Total TTC</TableHead>
+                  {marges && <TableHead className="text-right">Marge HT</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -126,14 +135,17 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                       <div className="text-xs text-muted-foreground">{LABELS.typeLigne[l.type]}</div>
                       {l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: l.prixUnitaireHT, prixCatalogueHT: l.prixCatalogueHT }) > 0 && (
                         <div className="text-xs text-success">
-                          Catalogue {eur(l.prixCatalogueHT)} · remise pro {tauxRemiseLigne({ prixUnitaireHT: l.prixUnitaireHT, prixCatalogueHT: l.prixCatalogueHT })} %
+                          Catalogue {eur(ttc(l.prixCatalogueHT, l.tvaRate))} TTC · remise pro {tauxRemiseLigne({ prixUnitaireHT: l.prixUnitaireHT, prixCatalogueHT: l.prixCatalogueHT })} %
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.quantite}</TableCell>
-                    <TableCell className="text-right tabular-nums">{eur(l.prixUnitaireHT)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {eur(ttc(l.prixUnitaireHT, l.tvaRate))}
+                      <div className="text-xs text-muted-foreground">{eur(l.prixUnitaireHT)} HT</div>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{l.tvaRate} %</TableCell>
-                    <TableCell className="text-right tabular-nums">{eur(l.totalHT)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{eur(ttc(l.totalHT, l.tvaRate))}</TableCell>
                     {marges && <TableCell className="text-right tabular-nums text-muted-foreground">{l.margeHT !== undefined ? eur(l.margeHT) : "–"}</TableCell>}
                   </TableRow>
                 ))}

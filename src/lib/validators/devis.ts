@@ -29,6 +29,10 @@ export const devisSchema = z
     prochainCT: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide").nullable().optional(),
     dateValidite: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide").optional(),
     lignes: z.array(ligneSchema).min(1, "Ajoutez au moins une ligne").max(60),
+    /** Seuil d'alerte des pièces : alerte dans l'éditeur et bon de commande automatique à la validation. */
+    priseEnCompteSeuil: z.boolean().optional(),
+    /** Modification : « Enregistrer en brouillon » repasse le devis en BROUILLON (sinon le statut ne change pas). */
+    brouillon: z.boolean().optional(),
   })
   .superRefine((d, ctx) => {
     if (d.type === "MECANIQUE" && !d.vehiculeId) {

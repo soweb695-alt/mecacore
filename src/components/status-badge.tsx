@@ -34,9 +34,12 @@ export const LABELS = {
   statutBL: { EN_ATTENTE: "En attente", PRETE: "Prêt à être retiré", LIVREE: "Livré" },
   statutBC: { EN_ATTENTE: "En attente", RECEPTIONNEE_PARTIELLE: "Réception partielle", RECEPTIONNEE: "Réceptionnée" },
   role: { ADMIN: "Administrateur", SECRETARIAT: "Magasin", MECANICIEN: "Atelier" },
+  typeRetour: { PIECE_DEPOSEE: "Pièce déposée / retour", CONSIGNE: "Consigne / échange standard" },
+  statutRetour: { EN_ATTENTE: "En attente", RENVOYEE_FOURNISSEUR: "Renvoyée au fournisseur", REMBOURSEE: "Consigne remboursée", RENDUE_CLIENT: "Rendue au client", CLOTUREE: "Clôturée" },
 } as const;
 
 export const TONE_DEVIS: Record<string, Tone> = { BROUILLON: "neutral", ENVOYE: "info", VALIDE: "ok", REJETE: "danger" };
 export const TONE_ORDRE: Record<string, Tone> = { EN_ATTENTE_SIGNATURE: "warn", SIGNE: "info", EN_COURS: "info", A_TRAITER_MAGASIN: "warn", FACTURE: "ok" };
 export const TONE_FACTURE: Record<string, Tone> = { BROUILLON: "neutral", EMISE: "info", PARTIELLEMENT_PAYEE: "warn", PAYEE: "ok", IMPAYEE: "danger", ANNULEE: "neutral" };
+export const TONE_RETOUR: Record<string, Tone> = { EN_ATTENTE: "warn", RENVOYEE_FOURNISSEUR: "info", REMBOURSEE: "ok", RENDUE_CLIENT: "ok", CLOTUREE: "neutral" };
 export const TONE_RDV: Record<string, Tone> = { PLANIFIE: "info", CONFIRME: "ok", HONORE: "neutral", ANNULE: "neutral", NO_SHOW: "danger" };

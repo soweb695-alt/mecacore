@@ -111,18 +111,16 @@ describe("confidentialité côté API", () => {
 });
 
 describe("parcours devis → facture par l'API", () => {
-  it("valide, refuse un stock insuffisant avec détail, facture, paie et génère les PDF", async () => {
+  it("valide malgré un stock insuffisant (alerte), facture, paie et génère les PDF", async () => {
     const creer = await creerDevisRoute(req("/api/devis", "POST", { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [ligne(b.p1.id, 2, 50)] }), ctx());
     const { id } = (await creer.json()).data;
     expect((await db.devis.findUniqueOrThrow({ where: { id } })).statut).toBe("BROUILLON"); // « Envoyé » seulement après un envoi d'e-mail réussi
 
     await db.piece.update({ where: { id: b.p1.id }, data: { stock: 1 } });
-    const refus = await validerRoute(req(`/api/devis/${id}/valider`, "POST", creneau(b.meca.id)), ctx({ id }));
-    expect(refus.status).toBe(409);
-    expect((await refus.json()).error.details[0]).toMatchObject({ demande: 2, disponible: 1 });
-
-    await db.piece.update({ where: { id: b.p1.id }, data: { stock: 5 } });
-    expect((await validerRoute(req(`/api/devis/${id}/valider`, "POST", creneau(b.meca.id)), ctx({ id }))).status).toBe(200);
+    const ok = await validerRoute(req(`/api/devis/${id}/valider`, "POST", creneau(b.meca.id)), ctx({ id }));
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).data.penuries[0]).toMatchObject({ demande: 2, disponible: 1 });
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).stock).toBe(-1);
     const fac = await factureRoute(req("/api/factures", "POST", { devisId: id }), ctx());
     const factureId = (await fac.json()).data.id;
     const total = Number((await db.facture.findUniqueOrThrow({ where: { id: factureId } })).totalTTC);
