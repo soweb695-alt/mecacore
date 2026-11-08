@@ -24,6 +24,7 @@ export async function pdfDevis(id: string): Promise<{ numero: string; pdf: Uint8
     remiseMontant: montantRemise(d.lignes.map((l) => ({ quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null }))),
     totaux: { totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) },
     remisePro: Number(d.remisePro),
+    prixTTC: true,
     notes: ["Devis gratuit, valable jusqu'à la date indiquée. Bon pour accord : date et signature du client précédées de la mention « Bon pour accord »."],
   });
   return { numero: d.numero, pdf };

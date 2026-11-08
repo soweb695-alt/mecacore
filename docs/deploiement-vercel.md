@@ -151,9 +151,9 @@ Si l'adresse finale diffère de celle saisie dans `NEXTAUTH_URL` / `APP_URL` : c
 
 Projet → **Settings** → **Functions** → **Function Region** : choisissez la région la plus proche de la base Neon (même région AWS), puis **Save** et **Redeploy**. Une base et des fonctions éloignées ajoutent de la latence à chaque requête.
 
-### 3.5 Stockage des fichiers (photos, signatures, logo)
+### 3.5 Stockage des fichiers (photos, signatures)
 
-Sur Vercel, le disque est en lecture seule : **sans S3, l'ajout d'une photo, d'une signature ou du logo échoue.** Le reste de l'application fonctionne. Créez un bucket compatible S3 (Cloudflare R2, Scaleway Object Storage, AWS S3…), privé, puis renseignez les cinq variables `S3_*` et redéployez.
+Sur Vercel, le disque est en lecture seule : **sans S3, l'ajout d'une photo ou d'une signature d'OR échoue.** Le reste de l'application fonctionne. Le **logo** (onglet Mon Garage) est enregistré dans la base de données : il fonctionne sans S3. Créez un bucket compatible S3 (Cloudflare R2, Scaleway Object Storage, AWS S3…), privé, puis renseignez les cinq variables `S3_*` et redéployez.
 
 ### 3.6 Tâches planifiées
 

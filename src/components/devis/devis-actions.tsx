@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FileDown, Lock, Mail, Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, FileDown, Lock, Mail, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, ApiClientError } from "@/lib/client-api";
+import { api } from "@/lib/client-api";
 import { cn } from "@/lib/utils";
 
 interface Penurie {
@@ -30,6 +30,8 @@ export function DevisActions({
   droits,
   jourParDefaut,
   clientEmail,
+  penuries = [],
+  priseEnCompteSeuil = true,
 }: {
   id: string;
   statut: "BROUILLON" | "ENVOYE" | "VALIDE" | "REJETE";
@@ -38,6 +40,9 @@ export function DevisActions({
   droits: { valider: boolean; rouvrir: boolean; modifier: boolean };
   jourParDefaut: string;
   clientEmail: string | null;
+  /** Pièces dont le stock est insuffisant : alerte affichée, la validation reste possible. */
+  penuries?: Penurie[];
+  priseEnCompteSeuil?: boolean;
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<"valider" | "rejeter" | null>(null);
@@ -47,7 +52,6 @@ export function DevisActions({
   const [fin, setFin] = useState("10:00");
   const [motif, setMotif] = useState("");
   const [pending, setPending] = useState(false);
-  const [penuries, setPenuries] = useState<Penurie[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const mecanique = type === "MECANIQUE";
   const enAttente = statut === "ENVOYE" || statut === "BROUILLON";
@@ -76,19 +80,18 @@ export function DevisActions({
       if (!jour || !debut || !fin || fin <= debut) return setErreur("Indiquez un créneau valide (la fin doit être après le début).");
     }
     setPending(true);
-    setPenuries(null);
     try {
       const body = mecanique ? { mecanicienId, rdv: { debut: `${jour}T${debut}`, fin: `${jour}T${fin}` } } : {};
-      const r = await api<{ ordre: { numero: string } | null; bonLivraison: { numero: string } | null; reappro: unknown[] }>(`/api/devis/${id}/valider`, "POST", body);
+      const r = await api<{ ordre: { numero: string } | null; bonLivraison: { numero: string } | null; reappro: unknown[]; penuries?: Penurie[] }>(`/api/devis/${id}/valider`, "POST", body);
       toast.success(
         r.ordre ? `Devis validé · ${r.ordre.numero} créé et rendez-vous planifié` : r.bonLivraison ? `Devis validé · ${r.bonLivraison.numero} en attente de livraison` : "Devis validé",
       );
+      if (r.penuries?.length) toast.warning(`Stock insuffisant pour ${r.penuries.length} pièce${r.penuries.length > 1 ? "s" : ""} : le stock est passé en négatif, pensez à commander.`);
       if (r.reappro?.length) toast.info("Bon de commande automatique créé pour les pièces au seuil d'alerte.");
       setDialog(null);
       router.refresh();
     } catch (e) {
-      if (e instanceof ApiClientError && e.code === "STOCK_INSUFFISANT") setPenuries((e.details as Penurie[] | undefined) ?? []);
-      else setErreur(e instanceof Error ? e.message : "Une erreur est survenue.");
+      setErreur(e instanceof Error ? e.message : "Une erreur est survenue.");
     } finally {
       setPending(false);
     }
@@ -130,7 +133,7 @@ export function DevisActions({
             <X aria-hidden />
             Rejeter
           </Button>
-          <Button onClick={() => { setPenuries(null); setErreur(null); setDialog("valider"); }}>
+          <Button onClick={() => { setErreur(null); setDialog("valider"); }}>
             <Check aria-hidden />
             Valider le devis
           </Button>
@@ -187,18 +190,22 @@ export function DevisActions({
               </div>
             </div>
           )}
-          {penuries && penuries.length > 0 && (
-            <div role="alert" className="rounded-lg bg-danger-bg p-3 text-sm text-destructive">
-              <p className="font-medium">Stock insuffisant, rien n&apos;a été modifié :</p>
-              <ul className="mt-1 list-disc pl-5">
-                {penuries.map((p) => (
-                  <li key={p.reference}>
-                    {p.nom} ({p.reference}) : {p.demande} demandé, {p.disponible} disponible
-                  </li>
-                ))}
-              </ul>
+          {penuries.length > 0 && (
+            <div role="alert" className="flex gap-2 rounded-lg bg-warning-bg p-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <div>
+                <p className="font-medium">Stock insuffisant : la validation reste possible, le stock deviendra négatif.</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {penuries.map((p) => (
+                    <li key={p.reference}>
+                      {p.nom} ({p.reference}) : {p.demande} demandé, {p.disponible} disponible
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
+          {!priseEnCompteSeuil && <p className="text-xs text-muted-foreground">Seuil d&apos;alerte non pris en compte pour ce devis : aucun bon de commande automatique ne sera créé.</p>}
           {erreur && (
             <p role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-destructive">
               {erreur}

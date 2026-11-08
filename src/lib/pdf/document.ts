@@ -35,7 +35,12 @@ export interface PdfDocData {
   virement?: { iban: string; bic: string; titulaire: string };
   /** Document de remise (bon de livraison) : ni prix, ni TVA, ni totaux. */
   sansPrix?: boolean;
+  /** Devis : colonnes « PU TTC » et « Total TTC » par ligne (le PU HT reste affiché, les totaux HT / TVA / TTC aussi). */
+  prixTTC?: boolean;
 }
+
+/** Prix TTC d'un montant HT, arrondi au centime. */
+const ttc = (ht: number, taux: number) => Math.round(ht * (100 + taux)) / 100;
 
 /** Les polices standard PDF n'encodent que le Latin-1 : on normalise espaces fines et caractères hors jeu. */
 const safe = (s: string) =>
@@ -127,18 +132,20 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
   y -= 85;
 
   // Tableau
-  const cols = { des: M, qte: 330, pu: 395, tva: 445, tot: W - M };
-  const largeurDes = d.sansPrix ? 400 : 270;
+  // Colonnes (bord droit de chaque valeur). Avec les prix TTC, la désignation est plus étroite.
+  const cols = d.prixTTC ? { des: M, qte: 290, pu: 350, tva: 385, puTTC: 450, tot: W - M } : { des: M, qte: 360, pu: 440, tva: 475, puTTC: 0, tot: W - M };
+  const largeurDes = d.sansPrix ? 400 : d.prixTTC ? 215 : 270;
   const entete = () => {
     page.drawRectangle({ x: M, y: y - 4, width: W - 2 * M, height: 18, color: rgb(0.945, 0.953, 0.965) });
     text(page, "Désignation", cols.des + 6, y, { font: bold, color: GRIS });
     if (d.sansPrix) {
       text(page, "Quantité", 0, y, { font: bold, color: GRIS, right: cols.tot });
     } else {
-      text(page, "Qté", 0, y, { font: bold, color: GRIS, right: cols.qte + 30 });
-      text(page, "PU HT", 0, y, { font: bold, color: GRIS, right: cols.pu + 45 });
-      text(page, "TVA", 0, y, { font: bold, color: GRIS, right: cols.tva + 30 });
-      text(page, "Total HT", 0, y, { font: bold, color: GRIS, right: cols.tot });
+      text(page, "Qté", 0, y, { font: bold, color: GRIS, right: cols.qte });
+      text(page, "PU HT", 0, y, { font: bold, color: GRIS, right: cols.pu });
+      text(page, "TVA", 0, y, { font: bold, color: GRIS, right: cols.tva });
+      if (d.prixTTC) text(page, "PU TTC", 0, y, { font: bold, color: GRIS, right: cols.puTTC });
+      text(page, d.prixTTC ? "Total TTC" : "Total HT", 0, y, { font: bold, color: GRIS, right: cols.tot });
     }
     y -= 20;
   };
@@ -157,10 +164,15 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
     if (d.sansPrix) {
       text(page, qte, 0, y, { right: cols.tot });
     } else {
-      text(page, qte, 0, y, { right: cols.qte + 30 });
-      text(page, `${eur(l.prixUnitaireHT)}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.pu + 45 });
-      text(page, `${nombre(l.tvaRate)} %`, 0, y, { right: cols.tva + 30 });
-      text(page, eur(l.totalHT), 0, y, { right: cols.tot });
+      text(page, qte, 0, y, { right: cols.qte });
+      text(page, `${eur(l.prixUnitaireHT)}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.pu });
+      text(page, `${nombre(l.tvaRate)} %`, 0, y, { right: cols.tva });
+      if (d.prixTTC) {
+        text(page, `${eur(ttc(l.prixUnitaireHT, l.tvaRate))}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.puTTC });
+        text(page, eur(ttc(l.totalHT, l.tvaRate)), 0, y, { right: cols.tot, font: bold });
+      } else {
+        text(page, eur(l.totalHT), 0, y, { right: cols.tot });
+      }
     }
     y -= lignes.length * 11 + details.length * 9.5 + 4;
     page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.5, color: LIGNE });

@@ -17,6 +17,7 @@ export type Resource =
   | "rdv"
   | "bonCommande"
   | "bonLivraison"
+  | "retour"
   | "message"
   | "campagne"
   | "analyse"
@@ -37,7 +38,7 @@ const MATRIX: Record<Role, Partial<Record<Resource, Action[]>>> = {
     (
       [
         "client", "vehicule", "piece", "tarif", "devis", "ordre", "photo", "facture",
-        "paiement", "rdv", "bonCommande", "bonLivraison", "message", "campagne", "analyse", "collaborateur",
+        "paiement", "rdv", "bonCommande", "bonLivraison", "retour", "message", "campagne", "analyse", "collaborateur",
         "parametre", "marge", "prixAchat",
       ] as Resource[]
     ).map((r) => [r, ALL]),
@@ -55,6 +56,7 @@ const MATRIX: Record<Role, Partial<Record<Resource, Action[]>>> = {
     rdv: ["read", "create", "update", "delete"],
     bonCommande: ["read", "create", "update"],
     bonLivraison: ["read", "create", "update"],
+    retour: ["read", "create", "update"],
     message: ["read", "create"],
     campagne: ["read", "create", "update", "delete"],
     prixAchat: ["read", "update"],
@@ -129,6 +131,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/vehicules", label: "Véhicules", icon: "car", group: "Clients", resource: "vehicule" },
   { href: "/campagnes", label: "Campagnes", icon: "megaphone", group: "Clients", resource: "campagne" },
   { href: "/stock", label: "Stock", icon: "box", group: "Gestion", resource: "piece" },
+  { href: "/retours", label: "Retours & Consignées", icon: "rotate-ccw", group: "Gestion", resource: "retour" },
   { href: "/bons-livraison", label: "Commandes et livraisons", icon: "truck", group: "Gestion", resource: "bonCommande" },
   { href: "/factures", label: "Factures", icon: "receipt", group: "Gestion", resource: "facture" },
   { href: "/relances", label: "Relances", icon: "bell-ring", group: "Gestion", resource: "facture" },

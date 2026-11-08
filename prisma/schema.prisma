@@ -31,6 +31,19 @@ enum StatutDevis {
   REJETE
 }
 
+enum TypeRetour {
+  PIECE_DEPOSEE
+  CONSIGNE
+}
+
+enum StatutRetour {
+  EN_ATTENTE
+  RENVOYEE_FOURNISSEUR
+  REMBOURSEE
+  RENDUE_CLIENT
+  CLOTUREE
+}
+
 enum TypeLigne {
   MAIN_OEUVRE
   FORFAIT
@@ -154,6 +167,7 @@ model User {
   relances       RelanceFacture[]
   fichesValidees FicheControle[]   @relation("FicheValidee")
   fichesTraitees FicheControle[]   @relation("FicheTraitee")
+  retours        RetourPiece[]
 }
 
 model Client {
@@ -182,6 +196,7 @@ model Client {
   rendezVous    RendezVous[]
   messages      MessageLog[]
   bonsLivraison BonLivraison[]
+  retours       RetourPiece[]
 
   @@index([lastName])
   @@index([companyName])
@@ -232,29 +247,32 @@ model Piece {
   tarifs          TarifPiece[]
   lignesCommande  LigneBonCommande[]
   lignesLivraison LigneBonLivraison[]
+  retours         RetourPiece[]
 
   @@index([nom])
   @@index([categorie])
 }
 
 model Devis {
-  id           String      @id @default(cuid())
-  numero       String      @unique
-  type         TypeDevis   @default(MECANIQUE)
-  clientId     String
-  vehiculeId   String?
-  userId       String
-  statut       StatutDevis @default(BROUILLON)
-  dateCreation DateTime    @default(now())
-  dateValidite DateTime
-  remisePro    Decimal     @default(0) @db.Decimal(5, 2)
-  kilometrage  Int?
-  totalHT      Decimal     @default(0) @db.Decimal(10, 2)
-  totalTVA     Decimal     @default(0) @db.Decimal(10, 2)
-  totalTTC     Decimal     @default(0) @db.Decimal(10, 2)
-  motifRejet   String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  numero             String      @unique
+  type               TypeDevis   @default(MECANIQUE)
+  clientId           String
+  vehiculeId         String?
+  userId             String
+  statut             StatutDevis @default(BROUILLON)
+  dateCreation       DateTime    @default(now())
+  dateValidite       DateTime
+  remisePro          Decimal     @default(0) @db.Decimal(5, 2)
+  kilometrage        Int?
+  totalHT            Decimal     @default(0) @db.Decimal(10, 2)
+  totalTVA           Decimal     @default(0) @db.Decimal(10, 2)
+  totalTTC           Decimal     @default(0) @db.Decimal(10, 2)
+  motifRejet         String?
+  /// Si faux : pas d'alerte de seuil dans l'éditeur ni de bon de commande automatique à la validation.
+  priseEnCompteSeuil Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   client       Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicule     Vehicule?        @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
@@ -313,6 +331,7 @@ model OrdreReparation {
   pointages Pointage[]
   photos    PhotoOR[]
   fiche     FicheControle?
+  retours   RetourPiece[]
 
   @@index([userId])
   @@index([statut])
@@ -604,7 +623,7 @@ model Campagne {
 }
 
 model ParametreGarage {
-  id                   Int     @id @default(1)
+  id                   Int       @id @default(1)
   nomGarage            String
   adresse              String
   telephone            String
@@ -612,17 +631,21 @@ model ParametreGarage {
   siret                String
   tvaNumber            String
   horaires             Json
-  prefixDevis          String  @default("DEV")
-  prefixFacture        String  @default("FAC")
-  prefixOrdre          String  @default("OR")
-  prefixBonCommande    String  @default("BC")
-  prefixBonLivraison   String  @default("BL")
-  retentionClientsAns  Int     @default(5)
-  retentionMessagesAns Int     @default(3)
+  prefixDevis          String    @default("DEV")
+  prefixFacture        String    @default("FAC")
+  prefixOrdre          String    @default("OR")
+  prefixBonCommande    String    @default("BC")
+  prefixBonLivraison   String    @default("BL")
+  retentionClientsAns  Int       @default(5)
+  retentionMessagesAns Int       @default(3)
   iban                 String?
   bic                  String?
-  /// Clé de stockage du logo (PNG ou JPEG), affiché en en-tête des PDF.
+  /// Ancienne clé de stockage du logo (S3 / disque). Remplacée par `logoData`, gardée pour les logos déjà envoyés.
   logoUrl              String?
+  /// Logo (PNG ou JPEG, 1 Mo max) stocké en base : fonctionne sans stockage S3 (disque en lecture seule sur Vercel).
+  logoData             Bytes?
+  logoMime             String?
+  logoMaj              DateTime?
 }
 
 model Compteur {
@@ -678,4 +701,37 @@ model PointFiche {
   fiche FicheControle @relation(fields: [ficheId], references: [id], onDelete: Cascade)
 
   @@index([ficheId])
+}
+
+/// Retours et pièces consignées : anciennes pièces déposées, échanges standard (consigne à récupérer auprès du fournisseur).
+model RetourPiece {
+  id                String       @id @default(cuid())
+  numero            String       @unique
+  type              TypeRetour
+  statut            StatutRetour @default(EN_ATTENTE)
+  designation       String
+  reference         String?
+  quantite          Int          @default(1)
+  /// Montant de la consigne (HT) attendu du fournisseur ou dû au client.
+  montantConsigneHT Decimal?     @db.Decimal(10, 2)
+  fournisseur       String?
+  notes             String?
+  pieceId           String?
+  clientId          String?
+  ordreId           String?
+  userId            String
+  dateEntree        DateTime     @default(now())
+  dateTraitement    DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  piece  Piece?           @relation(fields: [pieceId], references: [id], onDelete: SetNull)
+  client Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ordre  OrdreReparation? @relation(fields: [ordreId], references: [id], onDelete: SetNull)
+  user   User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([statut])
+  @@index([type])
+  @@index([clientId])
+  @@index([ordreId])
 }

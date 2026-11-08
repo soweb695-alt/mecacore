@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { lireComposition, libelleComposition } from "@/lib/composition";
 import type { PdfDocData, PdfLigne } from "@/lib/pdf/document";
 import { tauxRemiseLigne } from "@/lib/remise";
-import { getFichier, typeImage } from "@/lib/storage";
+import { lireLogo } from "@/lib/logo";
 
 const eur = (n: number) => n.toFixed(2).replace(".", ",");
 const nb = (n: number) => String(n).replace(".", ",");
@@ -12,9 +12,8 @@ const nb = (n: number) => String(n).replace(".", ",");
 export async function garagePdf(): Promise<(PdfDocData["garage"] & { iban: string | null; bic: string | null }) | null> {
   const g = await db.parametreGarage.findUnique({ where: { id: 1 } });
   if (!g) return null;
-  const buf = g.logoUrl ? await getFichier(g.logoUrl).catch(() => null) : null;
-  const type = buf ? typeImage(buf) : null;
-  const logo = buf && (type?.mime === "image/png" || type?.mime === "image/jpeg") ? { bytes: new Uint8Array(buf), format: type.mime === "image/png" ? ("png" as const) : ("jpg" as const) } : undefined;
+  const l = await lireLogo();
+  const logo = l ? { bytes: new Uint8Array(l.bytes), format: l.mime === "image/png" ? ("png" as const) : ("jpg" as const) } : undefined;
   return { nom: g.nomGarage, adresse: g.adresse, telephone: g.telephone, email: g.email, siret: g.siret, tva: g.tvaNumber, logo, iban: g.iban, bic: g.bic };
 }
 

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { creerDevis, modifierDevis, rejeterDevis, rouvrirDevis, validerDevis } from "@/lib/services/devis";
-import { ApiError } from "@/lib/errors";
 import { enregistrerRdv } from "@/lib/services/rdv";
 import type { LigneInput } from "@/lib/validators/devis";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
@@ -94,27 +93,49 @@ describe("validation d'un devis mécanique", () => {
     expect((await db.devis.findUniqueOrThrow({ where: { id } })).statut).toBe("BROUILLON");
   });
 
-  it("refuse (409) et ne modifie rien si le stock est insuffisant (rollback)", async () => {
+  it("valide malgré un stock insuffisant : le stock devient négatif et les pénuries sont renvoyées", async () => {
     const { id } = await mecanique([ligne(b.p2.id, 2, 10), ligne(b.p1.id, 4)]);
     await db.piece.update({ where: { id: b.p1.id }, data: { stock: 1 } });
 
-    const err = await validerDevis(id, creneau(b.meca.id)).catch((e) => e);
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err.status).toBe(409);
-    expect(err.code).toBe("STOCK_INSUFFISANT");
-    expect(err.details).toEqual([expect.objectContaining({ reference: "P1", demande: 4, disponible: 1 })]);
-
-    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p2.id } })).stock).toBe(5);
+    const r = await validerDevis(id, creneau(b.meca.id));
+    expect(r.penuries).toEqual([expect.objectContaining({ reference: "P1", demande: 4, disponible: 1 })]);
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).stock).toBe(-3);
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p2.id } })).stock).toBe(3);
+    expect(await db.ordreReparation.count()).toBe(1);
+    expect((await db.devis.findUniqueOrThrow({ where: { id } })).statut).toBe("VALIDE");
+    // Rouvrir restitue exactement ce qui a été décrémenté.
+    await rouvrirDevis(id);
     expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).stock).toBe(1);
-    expect(await db.ordreReparation.count()).toBe(0);
-    expect(await db.rendezVous.count()).toBe(0);
-    expect((await db.devis.findUniqueOrThrow({ where: { id } })).statut).toBe("BROUILLON");
   });
 
-  it("refuse d'ajouter une pièce dont la quantité dépasse le stock", async () => {
-    const err = await mecanique([ligne(b.p1.id, 6)]).catch((e) => e);
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err.code).toBe("STOCK_INSUFFISANT");
+  it("accepte une pièce dont la quantité dépasse le stock (alerte renvoyée, pas de blocage)", async () => {
+    const r = await mecanique([ligne(b.p1.id, 6)]);
+    expect(r.penuries).toEqual([expect.objectContaining({ reference: "P1", demande: 6, disponible: 5 })]);
+    expect(r.statut).toBe("BROUILLON");
+  });
+
+  it("refuse toujours une pièce désactivée", async () => {
+    await db.piece.update({ where: { id: b.p1.id }, data: { isActive: false } });
+    await expect(mecanique([ligne(b.p1.id, 1)])).rejects.toMatchObject({ code: "PIECE_INTROUVABLE" });
+  });
+
+  it("seuil d'alerte pris en compte (par défaut) : bon de commande automatique ; décoché : aucun", async () => {
+    const avec = await mecanique([ligne(b.p1.id, 3)]);
+    expect((await validerDevis(avec.id, creneau(b.meca.id))).reappro).toHaveLength(1); // stock 2 = seuil
+    await db.bonCommande.deleteMany();
+    await db.piece.update({ where: { id: b.p2.id }, data: { stock: 5 } });
+    const sans = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, priseEnCompteSeuil: false, lignes: [ligne(b.p2.id, 4)] });
+    expect((await db.devis.findUniqueOrThrow({ where: { id: sans.id } })).priseEnCompteSeuil).toBe(false);
+    expect((await validerDevis(sans.id, creneau(b.meca.id))).reappro).toHaveLength(0);
+    expect(await db.bonCommande.count()).toBe(0);
+  });
+
+  it("« Enregistrer en brouillon » repasse un devis envoyé en brouillon ; sans l'option, le statut ne change pas", async () => {
+    const { id } = await mecanique([ligne(b.p1.id, 1)]);
+    await db.devis.update({ where: { id }, data: { statut: "ENVOYE" } });
+    const base = { type: "MECANIQUE" as const, clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [ligne(b.p1.id, 2)] };
+    expect((await modifierDevis(id, base)).statut).toBe("ENVOYE");
+    expect((await modifierDevis(id, { ...base, brouillon: true })).statut).toBe("BROUILLON");
   });
 
   it("ne décrémente le stock qu'une seule fois en cas de validations concurrentes", async () => {

@@ -45,6 +45,7 @@ export default async function FicheClient({ params }: { params: Promise<{ id: st
 
   const nom = nomClient(client);
   const anonymise = !!client.anonymiseLe;
+  const retours = can(user, "read", "retour") ? await db.retourPiece.count({ where: { clientId: client.id } }) : null;
 
   return (
     <>
@@ -86,6 +87,11 @@ export default async function FicheClient({ params }: { params: Promise<{ id: st
                     />
                   )}
                 </FormDialog>
+              )}
+              {retours !== null && retours > 0 && (
+                <Link href={`/retours?clientId=${client.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
+                  Retours & consignées ({retours})
+                </Link>
               )}
               {can(user, "create", "devis") && (
                 <Link href={`/devis/nouveau?clientId=${client.id}`} className={cn(buttonVariants())}>

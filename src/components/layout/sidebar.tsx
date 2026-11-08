@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, BellRing, Box, Calendar, Car, FileText, LayoutDashboard, Megaphone, Receipt, Settings, Tag, Truck, UserCog, Users, Wrench, LogOut, Store,
+  BarChart3, BellRing, Box, Calendar, Car, FileText, LayoutDashboard, Megaphone, Receipt, Settings, Tag, Truck, UserCog, Users, Wrench, LogOut, Store, RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   "layout-dashboard": LayoutDashboard, users: Users, car: Car, "file-text": FileText, wrench: Wrench,
-  calendar: Calendar, box: Box, truck: Truck, receipt: Receipt, tag: Tag, "bar-chart-3": BarChart3, "user-cog": UserCog, megaphone: Megaphone, settings: Settings, "bell-ring": BellRing, store: Store,
+  calendar: Calendar, box: Box, truck: Truck, receipt: Receipt, tag: Tag, "bar-chart-3": BarChart3, "user-cog": UserCog, megaphone: Megaphone, settings: Settings, "bell-ring": BellRing, store: Store, "rotate-ccw": RotateCcw,
 };
 
 export interface SidebarItem {
