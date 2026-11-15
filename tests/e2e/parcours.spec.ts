@@ -356,7 +356,7 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
 
 test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de contrôle ; facture manuelle avec remise globale et virement", async ({ page }) => {
   await login(page, E2E.admin.email, E2E.admin.password);
-  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Mon Garage" }).click();
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Coordonnées et horaires" }).click();
   await page.getByLabel("Téléphone").fill("04 78 00 00 00");
   await page.getByRole("button", { name: "Enregistrer" }).first().click();
   await expect(page.getByText("Informations du garage enregistrées")).toBeVisible();
@@ -436,7 +436,7 @@ test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; pu
   await expect(page.getByText("Brouillon", { exact: true }).first()).toBeVisible();
 
   // Retour consigné rattaché au client.
-  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Retours & Consignées" }).click();
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Retours et consignes" }).click();
   await page.getByRole("button", { name: "Nouveau retour" }).click();
   const r = page.getByRole("dialog");
   await r.getByLabel("Type").selectOption("CONSIGNE");

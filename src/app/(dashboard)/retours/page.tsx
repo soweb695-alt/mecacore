@@ -20,7 +20,7 @@ import { requirePage } from "@/lib/session";
 import { jourParis } from "@/lib/time";
 import { retourListQuery } from "@/lib/validators/retour";
 
-export const metadata: Metadata = { title: "Retours & Consignées" };
+export const metadata: Metadata = { title: "Retours et consignes" };
 const TAILLE = 25;
 
 export default async function RetoursPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -55,7 +55,7 @@ export default async function RetoursPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader
-        title="Retours & Consignées"
+        title="Retours et consignes"
         description="Anciennes pièces déposées et pièces consignées (échange standard), rattachées à un client et/ou à un ordre de réparation."
         actions={
           peutCreer && (

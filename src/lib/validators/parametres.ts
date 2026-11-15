@@ -64,4 +64,20 @@ export const garageSchema = z.object({
     .max(20)
     .transform(compact)
     .refine((v) => v === "" || /^[A-Z]{2}[0-9A-Z]{2,13}$/.test(v), "N° de TVA invalide (ex. FR12345678901)"),
+  formeJuridique: z.string().trim().max(40).optional().default(""),
+  capitalSocial: z.string().trim().max(40).optional().default(""),
+  rcs: z.string().trim().max(80).optional().default(""),
 });
+
+export const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"] as const;
+export type Jour = (typeof JOURS)[number];
+
+/** Horaires d'ouverture : texte libre par jour (« 08:00-12:00 / 14:00-18:00 », « fermé »). */
+export const horairesSchema = z.object(Object.fromEntries(JOURS.map((j) => [j, z.string().trim().max(60, "60 caractères maximum")])) as Record<Jour, z.ZodString>);
+export type Horaires = z.infer<typeof horairesSchema>;
+
+/** Lecture tolérante du JSON stocké (jours manquants : chaîne vide). */
+export function lireHoraires(v: unknown): Horaires {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  return Object.fromEntries(JOURS.map((j) => [j, typeof o[j] === "string" ? (o[j] as string) : ""])) as Horaires;
+}

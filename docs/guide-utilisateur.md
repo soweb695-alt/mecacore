@@ -26,8 +26,8 @@ Sur tablette : ouvrez l'application dans le navigateur puis « Ajouter à l'écr
 
 Un devis validé est verrouillé. Seul l'administrateur peut le **Rouvrir** (tant que l'ordre n'est pas signé) : le stock est restitué.
 
-### Retours & Consignées
-Menu **Retours & Consignées** : **Nouveau retour** pour enregistrer une **pièce déposée / retour** (ancienne pièce démontée, pièce rapportée) ou une **consigne / échange standard** (montant de consigne à récupérer auprès du fournisseur). Rattachez-le à un **client** et/ou à un **ordre de réparation** (l'OR impose son client), et si besoin à une pièce du stock. Suivez le statut : En attente, Renvoyée au fournisseur, Consigne remboursée, Rendue au client, Clôturée. En haut de page : nombre de retours en attente et total des consignes à récupérer. Les fiches client et OR affichent un lien vers leurs retours. Ces retours ne modifient pas le stock. Seul l'administrateur peut supprimer un retour.
+### Retours et consignes
+Menu **Gestion › Retours et consignes** : **Nouveau retour** pour enregistrer une **pièce déposée / retour** (ancienne pièce démontée, pièce rapportée) ou une **consigne / échange standard** (montant de consigne à récupérer auprès du fournisseur). Rattachez-le à un **client** et/ou à un **ordre de réparation** (l'OR impose son client), et si besoin à une pièce du stock. Suivez le statut : En attente, Renvoyée au fournisseur, Consigne remboursée, Rendue au client, Clôturée. En haut de page : nombre de retours en attente et total des consignes à récupérer. Les fiches client et OR affichent un lien vers leurs retours. Ces retours ne modifient pas le stock. Seul l'administrateur peut supprimer un retour.
 
 ### Facturer et encaisser
 Sur un devis validé, **Créer la facture**. Sur la facture, **Enregistrer un paiement** (carte, espèces, chèque, virement, ou plusieurs fois : choisissez le nombre d'échéances, de 2 à 12) ; les paiements partiels sont permis. Statuts : Émise, Partiellement payée, Payée, Impayée (échéance dépassée). Un récapitulatif des impayés est envoyé chaque lundi.
@@ -60,6 +60,7 @@ Onglet **Campagnes** (Administrateur et Magasin) : créez une campagne (nom, des
 Chaque ordre de réparation a une **fiche de contrôle** remplie par le technicien (voir Atelier). Quand il la valide, elle apparaît chez vous : pastille sur « Ordres de réparation », carte dans les alertes du tableau de bord, onglet « Fiches de contrôle à traiter ». Ouvrez l'ordre pour la lire, puis **Marquer comme traitée** (ou **Renvoyer à l'atelier** pour correction).
 
 ## Administrateur uniquement
+- **Mon Garage › Coordonnées et horaires** : nom, adresse, contacts, SIRET, TVA, **forme juridique, capital social, RCS** (imprimés en pied de page des PDF), **horaires d'ouverture** par jour, logo et IBAN / BIC.
 - **Paramètres** : coordonnées bancaires (IBAN contrôlé, BIC) et liste des **points de la fiche de contrôle** (ajouter, renommer, réordonner, désactiver, supprimer). Chaque ordre reçoit une copie de la liste à la première ouverture ; modifier la liste ne change pas les fiches existantes.
 - **Tarifs** : forfaits, puis main d'œuvre, puis frais divers.
 - **Collaborateurs** : créer des comptes, changer un rôle, désactiver, réinitialiser un mot de passe, et choisir la **couleur** de chaque collaborateur (sélecteur de couleur ; sans choix, une couleur automatique est attribuée). Cette couleur sert dans le planning, la liste de choix des rendez-vous et le graphique « CA par collaborateur ».

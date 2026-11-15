@@ -21,7 +21,7 @@ export interface PdfDocData {
   numero: string;
   dateEmission: Date;
   dateSecondaire?: { label: string; date: Date };
-  garage: { nom: string; adresse: string; telephone: string; email: string; siret: string; tva: string; logo?: { bytes: Uint8Array; format: "png" | "jpg" } };
+  garage: { nom: string; adresse: string; telephone: string; email: string; siret: string; tva: string; mentions?: string; logo?: { bytes: Uint8Array; format: "png" | "jpg" } };
   client: { nom: string; adresse?: string | null; email?: string | null; siret?: string | null };
   /** Mentions obligatoires de la réparation automobile : véhicule, immatriculation, kilométrage. */
   vehicule?: { libelle: string; immatriculation: string; kilometrage: number | null } | null;
@@ -233,7 +233,7 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
 
   // Pied de page
   pdf.getPages().forEach((p, i, all) => {
-    text(p, `${d.garage.nom} · SIRET ${d.garage.siret} · TVA ${d.garage.tva}`, M, 28, { size: 7.5, color: GRIS });
+    text(p, [d.garage.nom, d.garage.mentions, `SIRET ${d.garage.siret}`, `TVA ${d.garage.tva}`].filter(Boolean).join(" · "), M, 28, { size: 7.5, color: GRIS });
     text(p, `Page ${i + 1}/${all.length}`, 0, 28, { size: 7.5, color: GRIS, right: W - M });
   });
 

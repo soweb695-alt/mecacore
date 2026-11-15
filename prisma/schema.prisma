@@ -642,6 +642,10 @@ model ParametreGarage {
   prefixBonLivraison   String    @default("BL")
   retentionClientsAns  Int       @default(5)
   retentionMessagesAns Int       @default(3)
+  /// Mentions légales imprimées en pied de page des PDF (ex. « SARL au capital de 10 000 € · RCS Lyon 123 456 789 »).
+  formeJuridique       String?
+  capitalSocial        String?
+  rcs                  String?
   iban                 String?
   bic                  String?
   /// Ancienne clé de stockage du logo (S3 / disque). Remplacée par `logoData`, gardée pour les logos déjà envoyés.

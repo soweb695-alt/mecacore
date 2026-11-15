@@ -15,7 +15,9 @@ export async function garagePdf(): Promise<(PdfDocData["garage"] & { iban: strin
   if (!g) return null;
   const l = await lireLogo();
   const logo = l ? { bytes: new Uint8Array(l.bytes), format: l.mime === "image/png" ? ("png" as const) : ("jpg" as const) } : undefined;
-  return { nom: g.nomGarage, adresse: g.adresse, telephone: g.telephone, email: g.email, siret: g.siret, tva: g.tvaNumber, logo, iban: g.iban, bic: g.bic };
+  const capital = g.capitalSocial ? `au capital de ${g.capitalSocial}` : "";
+  const mentions = [[g.formeJuridique, capital].filter(Boolean).join(" "), g.rcs].filter(Boolean).join(" · ") || undefined;
+  return { nom: g.nomGarage, adresse: g.adresse, telephone: g.telephone, email: g.email, siret: g.siret, tva: g.tvaNumber, mentions, logo, iban: g.iban, bic: g.bic };
 }
 
 interface LigneSource {

@@ -19,7 +19,7 @@ import { rechercherPieces } from "@/lib/services/pieces";
 import { requirePage } from "@/lib/session";
 import { pieceListQuery } from "@/lib/validators/piece";
 
-export const metadata: Metadata = { title: "Stock" };
+export const metadata: Metadata = { title: "Stocks" };
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("read", "piece");
@@ -38,7 +38,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader
-        title="Stock"
+        title="Stocks"
         description={
           <>
             {res.total} référence{res.total > 1 ? "s" : ""} ·{" "}

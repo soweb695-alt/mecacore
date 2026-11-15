@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { BanqueForm } from "@/components/parametres/banque-form";
 import { GarageForm } from "@/components/parametres/garage-form";
+import { HorairesForm } from "@/components/parametres/horaires-form";
 import { LogoUpload } from "@/components/parametres/logo-upload";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { requirePage } from "@/lib/session";
+import { lireHoraires } from "@/lib/validators/parametres";
 
 export const metadata: Metadata = { title: "Mon Garage" };
 
@@ -18,13 +20,22 @@ export default async function MonGaragePage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Coordonnées</CardTitle>
-            <CardDescription>Nom, adresse et contacts en en-tête ; SIRET et TVA en pied de page.</CardDescription>
+            <CardTitle>Coordonnées et mentions légales</CardTitle>
+            <CardDescription>Nom, adresse et contacts en en-tête des PDF ; SIRET, TVA, forme juridique, capital et RCS en pied de page.</CardDescription>
           </CardHeader>
           <CardContent>
             <GarageForm
-              initial={{ nomGarage: g?.nomGarage ?? "", adresse: g?.adresse ?? "", telephone: g?.telephone ?? "", email: g?.email ?? "", siret: g?.siret ?? "", tvaNumber: g?.tvaNumber ?? "" }}
+              initial={{ nomGarage: g?.nomGarage ?? "", adresse: g?.adresse ?? "", telephone: g?.telephone ?? "", email: g?.email ?? "", siret: g?.siret ?? "", tvaNumber: g?.tvaNumber ?? "", formeJuridique: g?.formeJuridique ?? "", capitalSocial: g?.capitalSocial ?? "", rcs: g?.rcs ?? "" }}
             />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Horaires d&apos;ouverture</CardTitle>
+            <CardDescription>Repris dans les e-mails envoyés aux clients (véhicule prêt, rappel de rendez-vous).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <HorairesForm initial={lireHoraires(g?.horaires)} />
           </CardContent>
         </Card>
         <Card>
