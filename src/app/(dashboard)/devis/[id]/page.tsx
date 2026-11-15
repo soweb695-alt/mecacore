@@ -55,7 +55,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
         penuries={penuries}
         priseEnCompteSeuil={d.priseEnCompteSeuil}
       />
-      {d.statut === "VALIDE" && !d.facture && !d.bonLivraison?.factureId && can(user, "create", "facture") && <CreerFactureButton devisId={d.id} totaux={{ totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) }} />}
+      {d.statut === "VALIDE" && !d.facture && !d.bonLivraison?.factureId && can(user, "create", "facture") && <CreerFactureButton devisId={d.id} totaux={d.totauxAvantRemise} remise={d.remise} />}
     </>
   );
 
@@ -93,6 +93,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
             prochainCT: d.vehicule?.prochainCT ? d.vehicule.prochainCT.toISOString().slice(0, 10) : "",
             dateValidite: d.dateValidite.toISOString().slice(0, 10),
             priseEnCompteSeuil: d.priseEnCompteSeuil,
+            remise: d.remise,
             lignes: d.lignes.map((l) => ({
               type: l.type,
               designation: l.designation,
@@ -158,6 +159,12 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                 <p className="text-xs text-success">
                   Remise professionnelle de {d.remisePro} % déduite sur les pièces ({eur(montantRemise(d.lignes))} HT).
                 </p>
+              )}
+              {d.remise && (
+                <>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Total TTC avant remise</span><span className="tabular-nums">{eur(d.totauxAvantRemise.totalTTC)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Remise {d.remise.type === "POURCENT" ? `${d.remise.valeur.toLocaleString("fr-FR")} %` : ""} (sur {d.remise.base})</span><span className="tabular-nums">− {eur(d.remiseMontant)}</span></div>
+                </>
               )}
               <div className="flex justify-between"><span className="text-muted-foreground">Total HT</span><span className="tabular-nums">{eur(d.totalHT)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">TVA</span><span className="tabular-nums">{eur(d.totalTVA)}</span></div>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ligneSchema } from "./devis";
+import { ligneSchema, remiseGlobaleSchema } from "./devis";
 import { idStr } from "./common";
 
 export const factureDepuisDevisSchema = z.object({ devisId: idStr });
@@ -23,15 +23,7 @@ export const factureListQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
 });
 
-export const remiseGlobaleSchema = z
-  .object({
-    type: z.enum(["EUROS", "POURCENT"]),
-    base: z.enum(["HT", "TTC"]),
-    valeur: z.number().min(0, "Remise invalide").max(1_000_000),
-  })
-  .superRefine((r, ctx) => {
-    if (r.type === "POURCENT" && r.valeur >= 100) ctx.addIssue({ code: "custom", path: ["valeur"], message: "Le pourcentage doit être inférieur à 100" });
-  });
+export { remiseGlobaleSchema };
 
 export const modePaiementSchema = z.enum(["CB", "ESPECES", "CHEQUE", "VIREMENT", "PLUSIEURS_FOIS"]);
 

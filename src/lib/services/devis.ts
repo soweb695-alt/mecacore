@@ -3,7 +3,7 @@ import { db, type Tx } from "@/lib/db";
 import { ApiError } from "@/lib/errors";
 import type { Prisma, TypeLigne } from "@/generated/prisma/client";
 import { lireComposition, type PieceComprise } from "@/lib/composition";
-import { calculerTotaux, prixLigne, prixUnitaireTTC } from "@/lib/money";
+import { calculerTotaux, colonnesRemiseGlobale, lireRemiseGlobale, prixLigne, prixUnitaireTTC } from "@/lib/money";
 import { prochainNumero } from "@/lib/numbering";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
 import { enregistrerRdvTx } from "@/lib/services/rdv";
@@ -109,7 +109,12 @@ async function preparer(tx: Tx, input: DevisInput) {
   const compos = await compositions(tx, input);
   const penuries = await verifierStock(tx, quantitesParPiece(input.lignes.map((l, i) => ({ ...l, composition: compos.get(i) }))));
 
-  const totaux = calculerTotaux(input.lignes);
+  let totaux;
+  try {
+    totaux = colonnesRemiseGlobale(calculerTotaux(input.lignes), input.remise);
+  } catch {
+    throw new ApiError(400, "La remise doit être inférieure au total du devis", "REMISE_INVALIDE");
+  }
   const remisePro = client.type === "PRO" ? Number(client.discountRate) : 0;
   return { client, totaux, remisePro, compos, penuries };
 }
@@ -358,6 +363,10 @@ export async function lireDevis(id: string, user: PermissionUser) {
     totalHT: Number(d.totalHT),
     totalTVA: Number(d.totalTVA),
     totalTTC: Number(d.totalTTC),
+    remise: lireRemiseGlobale(d),
+    remiseMontant: Number(d.remiseGlobaleMontant),
+    /** Totaux avant remise globale (recalculés depuis les lignes ; égaux aux totaux sans remise). */
+    totauxAvantRemise: d.totalHTAvantRemise !== null ? calculerTotaux(lignes) : { totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) },
     client: d.client,
     vehicule: d.vehicule,
     auteur: `${d.user.firstName} ${d.user.lastName}`,

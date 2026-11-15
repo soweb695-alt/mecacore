@@ -8,6 +8,7 @@ import { ClientForm, type ClientCree } from "@/components/clients/client-form";
 import { VehiculeForm, type VehiculeSaved } from "@/components/clients/vehicule-form";
 import { NouvellePieceDialog, type PieceCreee } from "@/components/devis/nouvelle-piece-dialog";
 import { SearchPicker } from "@/components/devis/search-picker";
+import { apercu, OptionsFactureFields, remiseDepuisState, stateDepuisRemise, type OptionsFactureState } from "@/components/factures/options-facture";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
-import { appliquerRemisePro, calculerMarge, calculerTotaux, formatEUR, formatMarge, montantsLigne, prixHTDepuisTTC, prixTTCDepuisHT, round2 } from "@/lib/money";
+import { appliquerRemisePro, type RemiseGlobale, calculerMarge, calculerTotaux, formatEUR, formatMarge, montantsLigne, prixHTDepuisTTC, prixTTCDepuisHT, round2 } from "@/lib/money";
 import { tauxRemiseLigne } from "@/lib/remise";
 import { devisSchema } from "@/lib/validators/devis";
 
@@ -72,6 +73,8 @@ export interface DevisInitial {
   prochainCT: string;
   dateValidite: string;
   priseEnCompteSeuil?: boolean;
+  /** Remise globale enregistrée sur le devis. */
+  remise?: RemiseGlobale | null;
   lignes: (Omit<LigneState, "key" | "prixTTC"> & { prixUnitaireTTC?: number | null })[];
 }
 
@@ -147,6 +150,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   const [dateValidite, setDateValidite] = useState(initial.dateValidite);
   const [lignes, setLignes] = useState<LigneState[]>(initial.lignes.map(({ prixUnitaireTTC, ...l }) => ({ ...l, key: nouvelleCle(), prixTTC: String(prixUnitaireTTC ?? versTTC(num(l.prixUnitaireHT), num(l.tvaRate))) })));
   const [seuil, setSeuil] = useState(initial.priseEnCompteSeuil ?? true);
+  const [remiseGlobale, setRemiseGlobale] = useState<OptionsFactureState>(() => stateDepuisRemise(initial.remise ?? null));
   const [nouvellePiece, setNouvellePiece] = useState(false);
   const [saving, setSaving] = useState<"brouillon" | "envoi" | null>(null);
 
@@ -179,6 +183,8 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
     () => calculerTotaux(lignes.map((l) => ({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), prixUnitaireTTC: num(l.prixTTC), tvaRate: num(l.tvaRate) }))),
     [lignes],
   );
+
+  const avecRemise = apercu(totaux, remiseGlobale);
 
   const demandes = useMemo(() => {
     const m = new Map<string, number>();
@@ -303,6 +309,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
       prochainCT: prochainCT || null,
       dateValidite,
       priseEnCompteSeuil: seuil,
+      remise: remiseDepuisState(remiseGlobale),
       brouillon: mode === "brouillon",
       lignes: lignes.map((l) => ({
         type: l.type,
@@ -317,6 +324,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
       })),
     };
     if (!client) return void toast.error("Sélectionnez un client.");
+    if (avecRemise.erreur) return void toast.error(avecRemise.erreur);
     const parsed = devisSchema.safeParse(payload);
     if (!parsed.success) return void toast.error(parsed.error.issues[0]?.message ?? "Devis invalide");
     // Stock insuffisant : alerte seulement, l'enregistrement n'est pas bloqué.
@@ -596,18 +604,34 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
             </table>
           </div>
 
+          <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="w-full max-w-md">
+            <OptionsFactureFields value={remiseGlobale} onChange={setRemiseGlobale} totaux={totaux} sansMode idPrefix="remise-devis" />
+          </div>
           <div className="ml-auto w-80 space-y-1.5 text-sm">
+            {avecRemise.totaux.montantRemise > 0 && !avecRemise.erreur && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total TTC avant remise</span>
+                  <span className="tabular-nums">{formatEUR(totaux.totalTTC)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Remise ({remiseGlobale.base})</span>
+                  <span className="tabular-nums">− {formatEUR(avecRemise.totaux.montantRemise)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total HT</span>
-              <span className="tabular-nums">{formatEUR(totaux.totalHT)}</span>
+              <span className="tabular-nums">{formatEUR(avecRemise.totaux.totalHT)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">TVA</span>
-              <span className="tabular-nums">{formatEUR(totaux.totalTVA)}</span>
+              <span className="tabular-nums">{formatEUR(avecRemise.totaux.totalTVA)}</span>
             </div>
             <div className="flex justify-between border-t pt-2 text-lg font-semibold">
               <span>Total TTC</span>
-              <span className="tabular-nums">{formatEUR(totaux.totalTTC)}</span>
+              <span className="tabular-nums">{formatEUR(avecRemise.totaux.totalTTC)}</span>
             </div>
             {marge !== null && (
               <div className="flex justify-between text-xs text-muted-foreground">
@@ -615,6 +639,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                 <span className="tabular-nums">{formatMarge(marge)}</span>
               </div>
             )}
+          </div>
           </div>
         </CardContent>
       </Card>

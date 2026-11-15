@@ -122,3 +122,25 @@ export function calculerMarge(venteHT: number, achatHT: number): { montant: numb
 /** « 12,40 € HT · 31 % » */
 export const formatMarge = (m: { montant: number; pct: number }): string =>
   `${formatEUR(m.montant)} HT · ${m.pct.toLocaleString("fr-FR")} %`;
+
+/** Colonnes de remise globale à enregistrer (devis ou facture). Lève RangeError si la remise dépasse le total. */
+export function colonnesRemiseGlobale(t: Totaux, remise: RemiseGlobale | null | undefined) {
+  const r = remise && remise.valeur > 0 ? remise : null;
+  const x = appliquerRemiseGlobale(t, r);
+  return {
+    totalHT: x.totalHT,
+    totalTVA: x.totalTVA,
+    totalTTC: x.totalTTC,
+    remiseGlobaleType: r?.type ?? null,
+    remiseGlobaleBase: r?.base ?? null,
+    remiseGlobaleValeur: r?.valeur ?? 0,
+    remiseGlobaleMontant: x.montantRemise,
+    totalHTAvantRemise: r ? x.totalHTAvantRemise : null,
+  };
+}
+
+/** Remise globale relue en base (null si aucune). */
+export function lireRemiseGlobale(d: { remiseGlobaleType: "EUROS" | "POURCENT" | null; remiseGlobaleBase: "HT" | "TTC" | null; remiseGlobaleValeur: unknown }): RemiseGlobale | null {
+  const v = Number(d.remiseGlobaleValeur);
+  return d.remiseGlobaleType && d.remiseGlobaleBase && v > 0 ? { type: d.remiseGlobaleType, base: d.remiseGlobaleBase, valeur: v } : null;
+}

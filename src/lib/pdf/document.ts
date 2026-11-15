@@ -33,7 +33,7 @@ export interface PdfDocData {
   notes?: string[];
   paiement?: { paye: number; reste: number };
   /** Remise globale sur la facture : tracée ligne à ligne dans le bloc des totaux. */
-  remiseGlobale?: { libelle: string; montant: number; totalHTAvantRemise: number };
+  remiseGlobale?: { libelle: string; montant: number; totalHTAvantRemise: number; /** Remise sur le TTC : total TTC avant remise affiché. */ totalTTCAvantRemise?: number };
   /** Coordonnées bancaires du garage, affichées pour un règlement par virement. */
   virement?: { iban: string; bic: string; titulaire: string };
   /** Document de remise (bon de livraison) : ni prix, ni TVA, ni totaux. */
@@ -196,7 +196,8 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
   };
   if (!d.sansPrix) {
     if (d.remiseGlobale) {
-      ligneTotal("Total HT avant remise", eur(d.remiseGlobale.totalHTAvantRemise));
+      if (d.remiseGlobale.totalTTCAvantRemise !== undefined) ligneTotal("Total TTC avant remise", eur(d.remiseGlobale.totalTTCAvantRemise));
+      else ligneTotal("Total HT avant remise", eur(d.remiseGlobale.totalHTAvantRemise));
       ligneTotal(d.remiseGlobale.libelle, `- ${eur(d.remiseGlobale.montant)}`);
     }
     ligneTotal("Total HT", eur(d.totaux.totalHT));

@@ -19,8 +19,18 @@ export function remiseDepuisState(o: OptionsFactureState): RemiseGlobale | null 
   return Number.isFinite(v) && v > 0 ? { type: o.type, base: o.base, valeur: v } : null;
 }
 
-/** Corps à envoyer à l'API : remise globale et mode de règlement prévu. */
-export const payloadOptions = (o: OptionsFactureState) => ({ remise: remiseDepuisState(o), modePaiement: o.mode || null });
+/**
+ * Corps à envoyer à l'API : remise globale et mode de règlement prévu.
+ * `heriterSiVide` : champ vide = reprendre les remises des devis (remise absente du corps) au lieu de « aucune remise ».
+ */
+export const payloadOptions = (o: OptionsFactureState, heriterSiVide = false) => {
+  const remise = remiseDepuisState(o);
+  return { ...(remise || !heriterSiVide ? { remise } : {}), modePaiement: o.mode || null };
+};
+
+/** État du formulaire à partir d'une remise enregistrée (devis). */
+export const stateDepuisRemise = (r: RemiseGlobale | null, base: OptionsFactureState = optionsInitiales): OptionsFactureState =>
+  r ? { ...base, valeur: String(r.valeur), type: r.type, base: r.base } : base;
 
 /** Aperçu des totaux après remise ; renvoie une erreur lisible si la remise est trop forte. */
 export function apercu(totaux: Totaux, o: OptionsFactureState): { totaux: Totaux & { montantRemise: number }; erreur: string | null } {
@@ -28,28 +38,28 @@ export function apercu(totaux: Totaux, o: OptionsFactureState): { totaux: Totaux
     const t = appliquerRemiseGlobale(totaux, remiseDepuisState(o));
     return { totaux: t, erreur: o.type === "POURCENT" && Number(o.valeur) >= 100 ? "Le pourcentage doit être inférieur à 100" : null };
   } catch {
-    return { totaux: { ...totaux, montantRemise: 0 }, erreur: "La remise doit être inférieure au total de la facture" };
+    return { totaux: { ...totaux, montantRemise: 0 }, erreur: "La remise doit être inférieure au total" };
   }
 }
 
 /** Remise globale (€ ou %, sur HT ou TTC) et mode de règlement : communs à toute création de facture. */
-export function OptionsFactureFields({ value, onChange, totaux }: { value: OptionsFactureState; onChange: (v: OptionsFactureState) => void; totaux?: Totaux }) {
+export function OptionsFactureFields({ value, onChange, totaux, sansMode = false, idPrefix = "remise" }: { value: OptionsFactureState; onChange: (v: OptionsFactureState) => void; totaux?: Totaux; sansMode?: boolean; idPrefix?: string }) {
   const set = (p: Partial<OptionsFactureState>) => onChange({ ...value, ...p });
   const a = totaux ? apercu(totaux, value) : null;
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
-        <Field label="Remise globale" htmlFor="remise-valeur" error={a?.erreur ?? undefined}>
-          <Input id="remise-valeur" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0" value={value.valeur} onChange={(e) => set({ valeur: e.target.value })} aria-invalid={!!a?.erreur} />
+        <Field label="Remise globale" htmlFor={`${idPrefix}-valeur`} error={a?.erreur ?? undefined}>
+          <Input id={`${idPrefix}-valeur`} type="number" inputMode="decimal" min="0" step="0.01" placeholder="0" value={value.valeur} onChange={(e) => set({ valeur: e.target.value })} aria-invalid={!!a?.erreur} />
         </Field>
-        <Field label="Unité" htmlFor="remise-type">
-          <NativeSelect id="remise-type" value={value.type} onChange={(e) => set({ type: e.target.value as OptionsFactureState["type"] })}>
+        <Field label="Unité" htmlFor={`${idPrefix}-type`}>
+          <NativeSelect id={`${idPrefix}-type`} value={value.type} onChange={(e) => set({ type: e.target.value as OptionsFactureState["type"] })}>
             <option value="POURCENT">%</option>
             <option value="EUROS">€</option>
           </NativeSelect>
         </Field>
-        <Field label="Calculée sur" htmlFor="remise-base">
-          <NativeSelect id="remise-base" value={value.base} onChange={(e) => set({ base: e.target.value as OptionsFactureState["base"] })}>
+        <Field label="Calculée sur" htmlFor={`${idPrefix}-base`}>
+          <NativeSelect id={`${idPrefix}-base`} value={value.base} onChange={(e) => set({ base: e.target.value as OptionsFactureState["base"] })}>
             <option value="HT">Total HT</option>
             <option value="TTC">Total TTC</option>
           </NativeSelect>
@@ -60,6 +70,7 @@ export function OptionsFactureFields({ value, onChange, totaux }: { value: Optio
           Remise de <b>{formatEUR(a.totaux.montantRemise)}</b> ({value.base}) · total HT {formatEUR(a.totaux.totalHT)} · <b>TTC {formatEUR(a.totaux.totalTTC)}</b>
         </p>
       )}
+      {!sansMode && (
       <Field label="Mode de règlement prévu" htmlFor="mode-paiement" hint="« Virement » ajoute l'IBAN et le BIC du garage sur le PDF.">
         <NativeSelect id="mode-paiement" value={value.mode} onChange={(e) => set({ mode: e.target.value as OptionsFactureState["mode"] })}>
           <option value="">Non précisé</option>
@@ -70,6 +81,7 @@ export function OptionsFactureFields({ value, onChange, totaux }: { value: Optio
           <option value="PLUSIEURS_FOIS">Paiement en plusieurs fois</option>
         </NativeSelect>
       </Field>
+      )}
     </div>
   );
 }

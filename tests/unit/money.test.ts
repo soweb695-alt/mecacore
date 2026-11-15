@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appliquerRemisePro, calculerTotaux, montantsLigne, prixHTDepuisTTC, prixLigne, prixTTCDepuisHT, totalLigneHT } from "@/lib/money";
+import { appliquerRemisePro, calculerMarge, calculerTotaux, formatMarge, montantsLigne, prixHTDepuisTTC, prixLigne, prixTTCDepuisHT, totalLigneHT } from "@/lib/money";
 
 describe("calculs de devis", () => {
   it("calcule HT, TVA et TTC sans erreur de flottant", () => {
@@ -74,8 +74,7 @@ describe("le TTC saisi fait foi (bug DEV-2026-0006 : 35,00 € affiché 34,99 �
 });
 
 describe("marge", () => {
-  it("en euros et en pourcentage du prix de vente", async () => {
-    const { calculerMarge, formatMarge } = await import("@/lib/money");
+  it("en euros et en pourcentage du prix de vente", () => {
     expect(calculerMarge(49.9, 28.4)).toEqual({ montant: 21.5, pct: 43.1 });
     expect(calculerMarge(0, 5)).toEqual({ montant: -5, pct: 0 });
     expect(formatMarge({ montant: 21.5, pct: 43.1 }).replace(/\s/g, " ")).toBe("21,50 € HT · 43,1 %");

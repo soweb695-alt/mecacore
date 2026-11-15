@@ -32,6 +32,7 @@ export async function pdfFacture(id: string): Promise<{ nom: string; pdf: Uint8A
             libelle: `Remise ${f.remiseGlobaleType === "POURCENT" ? `${String(Number(f.remiseGlobaleValeur)).replace(".", ",")} %` : "commerciale"} (sur ${f.remiseGlobaleBase})`,
             montant: Number(f.remiseGlobaleMontant),
             totalHTAvantRemise: Number(f.totalHTAvantRemise),
+            ...(f.remiseGlobaleBase === "TTC" ? { totalTTCAvantRemise: round2(Number(f.totalTTC) + Number(f.remiseGlobaleMontant)) } : {}),
           }
         : undefined,
     virement:

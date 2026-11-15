@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { creerDevis, modifierDevis, rejeterDevis, rouvrirDevis, validerDevis } from "@/lib/services/devis";
-import { creerFactureDepuisDevis } from "@/lib/services/factures";
+import { marquerLivre, marquerPrete } from "@/lib/services/bl";
+import { creerBrouillonTx, creerFactureDepuisBons, creerFactureDepuisDevis } from "@/lib/services/factures";
 import { enregistrerRdv } from "@/lib/services/rdv";
 import type { LigneInput } from "@/lib/validators/devis";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
@@ -269,5 +270,64 @@ describe("le TTC saisi fait foi (35,00 € ne devient plus 34,99 €)", () => {
     const l = await db.ligneDevis.findFirstOrThrow({ where: { devisId: id } });
     expect(Number(l.prixUnitaireHT)).toBe(29.17);
     expect(Number(l.totalHT)).toBe(29.17);
+  });
+});
+
+describe("remise globale sur le devis", () => {
+  const frais = (ttc: number) => ({ type: "FRAIS_DIVERS" as const, designation: "Frais", quantite: 1, prixUnitaireHT: 0, prixUnitaireTTC: ttc, tvaRate: 20 });
+
+  it("10 % sur le TTC : enregistrée sur le devis puis reprise sur la facture", async () => {
+    const { id } = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [frais(120)], remise: { type: "POURCENT", base: "TTC", valeur: 10 } });
+    const d = await db.devis.findUniqueOrThrow({ where: { id } });
+    expect(Number(d.totalTTC)).toBe(108);
+    expect(Number(d.totalHT)).toBe(90);
+    expect(Number(d.remiseGlobaleMontant)).toBe(12);
+    expect(Number(d.totalHTAvantRemise)).toBe(100);
+
+    await validerDevis(id, creneau(b.meca.id));
+    const f = await creerFactureDepuisDevis(id, b.user.id); // remise non précisée : celle du devis
+    const fac = await db.facture.findUniqueOrThrow({ where: { id: f.id } });
+    expect(Number(fac.totalTTC)).toBe(108);
+    expect(fac.remiseGlobaleType).toBe("POURCENT");
+    expect(Number(fac.remiseGlobaleMontant)).toBe(12);
+  });
+
+  it("la remise peut être retirée (null) ou changée au moment de facturer, sans double remise", async () => {
+    const { id } = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [frais(120)], remise: { type: "EUROS", base: "HT", valeur: 10 } });
+    await validerDevis(id, creneau(b.meca.id));
+    const f = await creerFactureDepuisDevis(id, b.user.id, { remise: { type: "EUROS", base: "TTC", valeur: 20 } });
+    expect(Number((await db.facture.findUniqueOrThrow({ where: { id: f.id } })).totalTTC)).toBe(100);
+  });
+
+  it("refuse une remise supérieure au total", async () => {
+    await expect(creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [frais(50)], remise: { type: "EUROS", base: "TTC", valeur: 60 } })).rejects.toMatchObject({ code: "REMISE_INVALIDE" });
+  });
+
+  it("le brouillon de facture préparé à la fin de l'OR garde la remise du devis", async () => {
+    const { id } = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [frais(120)], remise: { type: "POURCENT", base: "HT", valeur: 50 } });
+    const { ordre } = await validerDevis(id, creneau(b.meca.id));
+    const f = await db.$transaction((tx) => creerBrouillonTx(tx, ordre!.id));
+    const fac = await db.facture.findUniqueOrThrow({ where: { id: f.id } });
+    expect(Number(fac.totalTTC)).toBe(60);
+    expect(fac.remiseGlobaleBase).toBe("HT");
+  });
+});
+
+describe("facture groupée de bons de livraison", () => {
+  it("reprend les remises des devis en euros sur le TTC quand aucune remise n'est saisie", async () => {
+    const frais = { type: "FRAIS_DIVERS" as const, designation: "Frais", quantite: 1, prixUnitaireHT: 0, prixUnitaireTTC: 60, tvaRate: 20 };
+    const ids: string[] = [];
+    for (const remise of [{ type: "EUROS" as const, base: "TTC" as const, valeur: 5 }, null]) {
+      const { id } = await creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [ligne(b.p1.id, 1), frais], remise });
+      const { bonLivraison } = await validerDevis(id);
+      await marquerPrete(bonLivraison!.id);
+      await marquerLivre(bonLivraison!.id);
+      ids.push(bonLivraison!.id);
+    }
+    const f = await creerFactureDepuisBons(ids, b.user.id, { modePaiement: null });
+    const fac = await db.facture.findUniqueOrThrow({ where: { id: f.id } });
+    // 2 × (50 HT → 60 TTC + 60 TTC) = 240 TTC, moins la remise de 5 € du premier devis.
+    expect(Number(fac.totalTTC)).toBe(235);
+    expect(fac.remiseGlobaleType).toBe("EUROS");
   });
 });

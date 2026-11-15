@@ -51,7 +51,8 @@ export function BonsLivraisonTable({ rows, peutModifier, peutFacturer }: { rows:
       <FacturerDialog
         ouvert={dialog}
         onClose={() => setDialog(false)}
-        description="Une facture unique regroupe les bons sélectionnés. Remise globale et mode de règlement se règlent avant l'émission."
+        heriterSiVide
+        description="Une facture unique regroupe les bons sélectionnés. Laissez la remise vide pour reprendre celles des devis ; le mode de règlement se règle avant l'émission."
         onConfirm={async (options) => {
           const f = await api<{ id: string; numero: string }>("/api/factures/bons-livraison", "POST", { bonLivraisonIds: selection, ...options });
           toast.success(`Facture ${f.numero} créée`);

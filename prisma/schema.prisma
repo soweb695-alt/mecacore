@@ -279,6 +279,13 @@ model Devis {
   dateCreation       DateTime    @default(now())
   dateValidite       DateTime
   remisePro          Decimal     @default(0) @db.Decimal(5, 2)
+  /// Remise globale (comme sur la facture) : saisie € ou %, base HT ou TTC, montant déduit sur cette base.
+  remiseGlobaleType    TypeRemise?
+  remiseGlobaleBase    BaseRemise?
+  remiseGlobaleValeur  Decimal     @default(0) @db.Decimal(10, 2)
+  remiseGlobaleMontant Decimal     @default(0) @db.Decimal(10, 2)
+  /// Total HT avant remise globale (null = pas de remise globale).
+  totalHTAvantRemise   Decimal?    @db.Decimal(10, 2)
   kilometrage        Int?
   totalHT            Decimal     @default(0) @db.Decimal(10, 2)
   totalTVA           Decimal     @default(0) @db.Decimal(10, 2)
