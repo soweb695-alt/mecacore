@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { lireComposition, libelleComposition } from "@/lib/composition";
 import type { PdfDocData, PdfLigne } from "@/lib/pdf/document";
+import { montantsLigne, prixUnitaireTTC } from "@/lib/money";
 import { tauxRemiseLigne } from "@/lib/remise";
 import { lireLogo } from "@/lib/logo";
 
@@ -22,6 +23,7 @@ interface LigneSource {
   designation: string;
   quantite: unknown;
   prixUnitaireHT: unknown;
+  prixUnitaireTTC?: unknown;
   prixCatalogueHT: unknown;
   tvaRate: unknown;
   totalHT: unknown;
@@ -40,6 +42,7 @@ export async function lignesPdf(lignes: LigneSource[]): Promise<PdfLigne[]> {
   return lignes.map((l) => {
     const quantite = Number(l.quantite);
     const pu = Number(l.prixUnitaireHT);
+    const calcul = { quantite, prixUnitaireHT: pu, prixUnitaireTTC: l.prixUnitaireTTC != null ? Number(l.prixUnitaireTTC) : null, tvaRate: Number(l.tvaRate) };
     const cat = l.prixCatalogueHT != null ? Number(l.prixCatalogueHT) : null;
     const taux = tauxRemiseLigne({ prixUnitaireHT: pu, prixCatalogueHT: cat });
     const detail: string[] = [];
@@ -61,6 +64,8 @@ export async function lignesPdf(lignes: LigneSource[]): Promise<PdfLigne[]> {
       prixUnitaireHT: pu,
       tvaRate: Number(l.tvaRate),
       totalHT: Number(l.totalHT),
+      prixUnitaireTTC: prixUnitaireTTC(calcul),
+      totalTTC: montantsLigne(calcul).totalTTC,
       detail: detail.length ? detail : undefined,
     };
   });

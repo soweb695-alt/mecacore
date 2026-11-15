@@ -7,6 +7,8 @@ export const ligneSchema = z
     designation: z.string().trim().min(1, "La désignation est requise").max(200),
     quantite: z.number().positive("La quantité doit être positive").max(10000),
     prixUnitaireHT: z.number().min(0, "Prix invalide").max(100000),
+    /** Prix unitaire TTC saisi : il fait foi (le HT en est déduit côté serveur). Absent : déduit du HT. */
+    prixUnitaireTTC: z.number().min(0, "Prix invalide").max(130000).nullable().optional(),
     /** Prix catalogue avant réduction professionnelle (lignes « Pièce » uniquement) : sert à tracer la remise. */
     prixCatalogueHT: z.number().min(0).max(100000).nullable().optional(),
     tvaRate: z.number().min(0).max(30),

@@ -449,3 +449,29 @@ test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; pu
   await expect(page.getByRole("row", { name: /Étrier échange standard/ })).toContainText("Sophie Leroy");
   await expect(page.getByText("45,00 €").first()).toBeVisible();
 });
+
+test("16. devis : PU HT et PU TTC se mettent à jour l'un l'autre ; 2 × 17,50 € TTC = 35,00 € (et non 34,99 €)", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/devis/nouveau");
+  await page.getByLabel("Type de devis").selectOption("PIECE");
+  await page.getByLabel("Rechercher un client", { exact: true }).fill("Sophie");
+  await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
+  await page.getByLabel("Ajouter : Frais divers").selectOption("__libre");
+  await page.getByLabel("Désignation").fill("Contrôle éclairage");
+
+  // Saisie du HT : le TTC suit immédiatement, ainsi que les totaux.
+  await page.getByLabel("Prix unitaire HT").fill("29,17");
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("35");
+
+  // Saisie du TTC : le HT suit ; le total TTC est exactement celui saisi.
+  await page.getByLabel("Quantité").fill("2");
+  await page.getByLabel("Prix unitaire TTC").fill("17,50");
+  await expect(page.getByLabel("Prix unitaire HT")).toHaveValue("14.58");
+  const totalTTC = page.locator("div", { hasText: /^Total TTC/ }).last();
+  await expect(totalTTC).toContainText("35,00");
+
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
+  await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("17.5");
+  await expect(page.locator("div", { hasText: /^Total TTC/ }).last()).toContainText("35,00");
+});

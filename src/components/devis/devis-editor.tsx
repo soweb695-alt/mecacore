@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
-import { appliquerRemisePro, calculerTotaux, formatEUR, round2, totalLigneHT } from "@/lib/money";
+import { appliquerRemisePro, calculerTotaux, formatEUR, montantsLigne, prixHTDepuisTTC, prixTTCDepuisHT, round2 } from "@/lib/money";
 import { tauxRemiseLigne } from "@/lib/remise";
 import { devisSchema } from "@/lib/validators/devis";
 
@@ -26,9 +26,9 @@ interface LigneState {
   type: TypeLigne;
   designation: string;
   quantite: string;
-  /** Prix unitaire HT : c'est lui qui est enregistré en base. */
+  /** Prix unitaire HT, modifiable : sa saisie recalcule le TTC. */
   prixUnitaireHT: string;
-  /** Prix unitaire TTC affiché et saisi à l'écran ; le HT en est déduit (arrondi au centime). */
+  /** Prix unitaire TTC, modifiable : il fait foi pour les totaux (le HT en est déduit). */
   prixTTC: string;
   tvaRate: string;
   pieceId: string | null;
@@ -72,7 +72,7 @@ export interface DevisInitial {
   prochainCT: string;
   dateValidite: string;
   priseEnCompteSeuil?: boolean;
-  lignes: Omit<LigneState, "key" | "prixTTC">[];
+  lignes: (Omit<LigneState, "key" | "prixTTC"> & { prixUnitaireTTC?: number | null })[];
 }
 
 interface Tarif {
@@ -116,10 +116,13 @@ const nouvelleCle = () => `l${++compteur}`;
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(",", ".")));
 /** TVA par défaut des lignes (taux normal). */
 const TVA = 20;
-const versTTC = (ht: number, taux: number) => round2(ht * (1 + taux / 100));
-const versHT = (ttc: number, taux: number) => round2(ttc / (1 + taux / 100));
-/** Prix HT fixé par le programme (catalogue, tarif, remise) : le prix TTC affiché suit. */
+const versTTC = prixTTCDepuisHT;
+const versHT = prixHTDepuisTTC;
+/** Prix HT fixé par le programme ou saisi (catalogue, tarif, remise) : le prix TTC suit, au centime. */
 const avecHT = (ht: number, taux: number) => ({ prixUnitaireHT: String(ht), prixTTC: String(versTTC(ht, taux)) });
+/** Montants d'une ligne de l'éditeur (le TTC unitaire fait foi). */
+const montants = (l: Pick<LigneState, "quantite" | "prixUnitaireHT" | "prixTTC" | "tvaRate">) =>
+  montantsLigne({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), prixUnitaireTTC: num(l.prixTTC), tvaRate: num(l.tvaRate) });
 const nomClientHit = (c: ClientHit) => (c.type === "PRO" && c.companyName ? c.companyName : [c.firstName, c.lastName].filter(Boolean).join(" "));
 /** Réduction professionnelle : recalcule les seules lignes « Pièce » du stock dont le prix n'a pas été modifié à la main. */
 function reappliquerRemise(lignes: LigneState[], taux: number): LigneState[] {
@@ -140,7 +143,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   const [nouveauVehicule, setNouveauVehicule] = useState(false);
   const [nouveauClient, setNouveauClient] = useState(false);
   const [dateValidite, setDateValidite] = useState(initial.dateValidite);
-  const [lignes, setLignes] = useState<LigneState[]>(initial.lignes.map((l) => ({ ...l, key: nouvelleCle(), prixTTC: String(versTTC(num(l.prixUnitaireHT), num(l.tvaRate))) })));
+  const [lignes, setLignes] = useState<LigneState[]>(initial.lignes.map(({ prixUnitaireTTC, ...l }) => ({ ...l, key: nouvelleCle(), prixTTC: String(prixUnitaireTTC ?? versTTC(num(l.prixUnitaireHT), num(l.tvaRate))) })));
   const [seuil, setSeuil] = useState(initial.priseEnCompteSeuil ?? true);
   const [nouvellePiece, setNouvellePiece] = useState(false);
   const [saving, setSaving] = useState<"brouillon" | "envoi" | null>(null);
@@ -171,7 +174,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   const fetchPieces = useCallback(async (q: string) => (await api<{ items: PieceHit[] }>(`/api/stock?q=${encodeURIComponent(q)}`, "GET")).items, []);
 
   const totaux = useMemo(
-    () => calculerTotaux(lignes.map((l) => ({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), tvaRate: num(l.tvaRate) }))),
+    () => calculerTotaux(lignes.map((l) => ({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), prixUnitaireTTC: num(l.prixTTC), tvaRate: num(l.tvaRate) }))),
     [lignes],
   );
 
@@ -195,7 +198,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
     if (!voirMarges) return null;
     let m = 0;
     for (const l of lignes) {
-      if (l.type === "PIECE" && l.prixAchatHT !== undefined) m += (num(l.prixUnitaireHT) - l.prixAchatHT) * num(l.quantite);
+      if (l.type === "PIECE" && l.prixAchatHT !== undefined) m += montants(l).totalHT - l.prixAchatHT * num(l.quantite);
     }
     return round2(m);
   }, [lignes, voirMarges]);
@@ -225,9 +228,14 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
     ]);
   }
 
-  /** Saisie du prix TTC : le HT enregistré en est déduit. */
+  /** Saisie du prix TTC : le HT est recalculé immédiatement. */
   function majTTC(l: LigneState, v: string) {
     maj(l.key, { prixTTC: v, prixUnitaireHT: String(versHT(num(v), num(l.tvaRate))), prixManuel: true });
+  }
+
+  /** Saisie du prix HT : le TTC (qui fait foi pour les totaux) est recalculé immédiatement. */
+  function majHT(l: LigneState, v: string) {
+    maj(l.key, { prixUnitaireHT: v, prixTTC: String(versTTC(num(v), num(l.tvaRate))), prixManuel: true });
   }
 
   /** Changement de TVA : le prix TTC saisi est conservé, le HT est recalculé. */
@@ -294,6 +302,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
         designation: l.designation,
         quantite: num(l.quantite),
         prixUnitaireHT: num(l.prixUnitaireHT),
+        prixUnitaireTTC: num(l.prixTTC),
         tvaRate: num(l.tvaRate),
         pieceId: l.pieceId,
         prixCatalogueHT: l.type === "PIECE" ? l.prixCatalogueHT : null,
@@ -508,6 +517,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                   <th className="rounded-l-lg px-2 py-2 font-medium">Type</th>
                   <th className="px-2 py-2 font-medium">Désignation</th>
                   <th className="w-20 px-2 py-2 font-medium">Qté</th>
+                  <th className="w-28 px-2 py-2 font-medium">PU HT</th>
                   <th className="w-28 px-2 py-2 font-medium">PU TTC</th>
                   <th className="w-20 px-2 py-2 font-medium">TVA %</th>
                   <th className="w-28 px-2 py-2 text-right font-medium">Total TTC</th>
@@ -518,14 +528,15 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
               <tbody>
                 {lignes.length === 0 && (
                   <tr>
-                    <td colSpan={voirMarges ? 8 : 7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={voirMarges ? 9 : 8} className="py-8 text-center text-muted-foreground">
                       Ajoutez un forfait, de la main d&apos;œuvre ou une pièce.
                     </td>
                   </tr>
                 )}
                 {lignes.map((l) => {
                   const alerte = alerteStock(l);
-                  const m = l.type === "PIECE" && l.prixAchatHT !== undefined ? round2((num(l.prixUnitaireHT) - l.prixAchatHT) * num(l.quantite)) : null;
+                  const ml = montants(l);
+                  const m = l.type === "PIECE" && l.prixAchatHT !== undefined ? round2(ml.totalHT - l.prixAchatHT * num(l.quantite)) : null;
                   return (
                     <tr key={l.key} className="border-b align-top">
                       <td className="px-2 py-2 text-xs text-muted-foreground">{TYPE_LABEL[l.type]}</td>
@@ -542,8 +553,10 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                         <Input aria-label="Quantité" inputMode="decimal" value={l.quantite} onChange={(e) => maj(l.key, { quantite: e.target.value })} />
                       </td>
                       <td className="px-2 py-1.5">
+                        <Input aria-label="Prix unitaire HT" inputMode="decimal" value={l.prixUnitaireHT} onChange={(e) => majHT(l, e.target.value)} />
+                      </td>
+                      <td className="px-2 py-1.5">
                         <Input aria-label="Prix unitaire TTC" inputMode="decimal" value={l.prixTTC} onChange={(e) => majTTC(l, e.target.value)} />
-                        <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{formatEUR(num(l.prixUnitaireHT))} HT</p>
                         {l.type === "PIECE" && l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: num(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT }) > 0 && (
                           <p className="mt-1 text-[11px] leading-tight text-success">
                             Catalogue {formatEUR(versTTC(l.prixCatalogueHT, num(l.tvaRate)))} TTC · remise {tauxRemiseLigne({ prixUnitaireHT: num(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT })} %
@@ -553,7 +566,10 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                       <td className="px-2 py-1.5">
                         <Input aria-label="Taux de TVA" inputMode="decimal" value={l.tvaRate} onChange={(e) => majTVA(l, e.target.value)} />
                       </td>
-                      <td className="px-2 py-3 text-right tabular-nums">{formatEUR(versTTC(totalLigneHT({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT) }), num(l.tvaRate)))}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">
+                        {formatEUR(ml.totalTTC)}
+                        <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{formatEUR(ml.totalHT)} HT</p>
+                      </td>
                       {voirMarges && <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{m === null ? "–" : formatEUR(m)}</td>}
                       <td className="px-1 py-1.5">
                         <Button type="button" variant="ghost" size="icon-sm" aria-label="Supprimer la ligne" onClick={() => setLignes((ls) => ls.filter((x) => x.key !== l.key))}>

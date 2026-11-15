@@ -3,7 +3,7 @@ import { db, type Tx } from "@/lib/db";
 import { ApiError } from "@/lib/errors";
 import type { Prisma, TypeLigne } from "@/generated/prisma/client";
 import { lireComposition, type PieceComprise } from "@/lib/composition";
-import { calculerTotaux, totalLigneHT } from "@/lib/money";
+import { calculerTotaux, prixLigne, prixUnitaireTTC } from "@/lib/money";
 import { prochainNumero } from "@/lib/numbering";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
 import { enregistrerRdvTx } from "@/lib/services/rdv";
@@ -115,20 +115,23 @@ async function preparer(tx: Tx, input: DevisInput) {
 }
 
 function lignesData(input: DevisInput, compos: Map<number, PieceComprise[]>) {
-  return input.lignes.map((l, i) => ({
+  return input.lignes.map((l, i) => {
+    // Le PU TTC fait foi : PU HT et total HT en sont déduits ici, quel que soit le HT envoyé par le client.
+    const prix = prixLigne(l);
+    return {
     type: l.type,
     designation: l.designation,
     quantite: l.quantite,
-    prixUnitaireHT: l.prixUnitaireHT,
+    ...prix,
     // La réduction ne concerne que les pièces : on ne garde un prix catalogue que sur ces lignes.
-    prixCatalogueHT: l.type === "PIECE" && l.prixCatalogueHT != null && l.prixCatalogueHT > l.prixUnitaireHT ? l.prixCatalogueHT : null,
+    prixCatalogueHT: l.type === "PIECE" && l.prixCatalogueHT != null && l.prixCatalogueHT > prix.prixUnitaireHT ? l.prixCatalogueHT : null,
     tvaRate: l.tvaRate,
-    totalHT: totalLigneHT(l),
     pieceId: l.type === "PIECE" ? (l.pieceId ?? null) : null,
     tarifId: l.type === "FORFAIT" ? (l.tarifId ?? null) : null,
     composition: (compos.get(i) as unknown as Prisma.InputJsonValue) ?? undefined,
     position: i,
-  }));
+    };
+  });
 }
 
 function dateValidite(input: DevisInput): Date {
@@ -328,6 +331,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       designation: l.designation,
       quantite: Number(l.quantite),
       prixUnitaireHT: pu,
+      prixUnitaireTTC: prixUnitaireTTC({ prixUnitaireHT: pu, prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, tvaRate: Number(l.tvaRate) }),
       prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null,
       tvaRate: Number(l.tvaRate),
       totalHT: Number(l.totalHT),
@@ -337,7 +341,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       seuilAlerte: l.piece?.seuilAlerte ?? null,
       tarifId: l.tarifId,
       piecesComprises: lireComposition(l.composition),
-      ...(marges && achat !== null ? { prixAchatHT: achat, margeHT: Math.round((pu - achat) * Number(l.quantite) * 100) / 100 } : {}),
+      ...(marges && achat !== null ? { prixAchatHT: achat, margeHT: Math.round((Number(l.totalHT) - achat * Number(l.quantite)) * 100) / 100 } : {}),
     };
   });
   return {

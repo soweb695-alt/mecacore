@@ -295,6 +295,8 @@ model LigneDevis {
   designation     String
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.
+  prixUnitaireTTC Decimal?  @db.Decimal(10, 2)
   prixCatalogueHT Decimal?  @db.Decimal(10, 2)
   tvaRate         Decimal   @default(20) @db.Decimal(5, 2)
   totalHT         Decimal   @db.Decimal(10, 2)
@@ -492,6 +494,8 @@ model LigneFacture {
   designation     String
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.
+  prixUnitaireTTC Decimal?  @db.Decimal(10, 2)
   prixCatalogueHT Decimal?  @db.Decimal(10, 2)
   tvaRate         Decimal   @db.Decimal(5, 2)
   totalHT         Decimal   @db.Decimal(10, 2)

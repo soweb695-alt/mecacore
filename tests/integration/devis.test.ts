@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { creerDevis, modifierDevis, rejeterDevis, rouvrirDevis, validerDevis } from "@/lib/services/devis";
+import { creerFactureDepuisDevis } from "@/lib/services/factures";
 import { enregistrerRdv } from "@/lib/services/rdv";
 import type { LigneInput } from "@/lib/validators/devis";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
@@ -242,5 +243,31 @@ describe("numérotation et calculs", () => {
   it("génère des numéros uniques sous charge concurrente", async () => {
     const res = await Promise.all(Array.from({ length: 8 }, () => creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [ligne(b.p1.id, 1)] })));
     expect(new Set(res.map((r) => r.numero)).size).toBe(8);
+  });
+});
+
+describe("le TTC saisi fait foi (35,00 € ne devient plus 34,99 €)", () => {
+  it("devis, OR et facture gardent 35,00 € TTC pour 2 × 17,50 € TTC", async () => {
+    const mo = { type: "MAIN_OEUVRE" as const, designation: "Contrôle", quantite: 2, prixUnitaireHT: 14.58, prixUnitaireTTC: 17.5, tvaRate: 20 };
+    const { id } = await mecanique([mo]);
+    const d = await db.devis.findUniqueOrThrow({ where: { id }, include: { lignes: true } });
+    expect(Number(d.totalTTC)).toBe(35);
+    expect(Number(d.totalHT)).toBe(29.17);
+    expect(Number(d.totalTVA)).toBe(5.83);
+    expect(Number(d.lignes[0].prixUnitaireTTC)).toBe(17.5);
+    expect(Number(d.lignes[0].prixUnitaireHT)).toBe(14.58);
+
+    await validerDevis(id, creneau(b.meca.id));
+    const f = await creerFactureDepuisDevis(id, b.user.id);
+    const fac = await db.facture.findUniqueOrThrow({ where: { id: f.id }, include: { lignes: true } });
+    expect(Number(fac.totalTTC)).toBe(35);
+    expect(Number(fac.lignes[0].prixUnitaireTTC)).toBe(17.5);
+  });
+
+  it("le HT envoyé par le navigateur est recalculé à partir du TTC", async () => {
+    const { id } = await mecanique([{ type: "FRAIS_DIVERS", designation: "Divers", quantite: 1, prixUnitaireHT: 1, prixUnitaireTTC: 35, tvaRate: 20 }]);
+    const l = await db.ligneDevis.findFirstOrThrow({ where: { devisId: id } });
+    expect(Number(l.prixUnitaireHT)).toBe(29.17);
+    expect(Number(l.totalHT)).toBe(29.17);
   });
 });

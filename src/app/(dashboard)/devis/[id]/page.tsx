@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { db } from "@/lib/db";
 import { dateFR, eur, nomClient } from "@/lib/format";
 import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
+import { montantsLigne, prixTTCDepuisHT } from "@/lib/money";
 import { lireDevis, penuriesDevis } from "@/lib/services/devis";
 import { montantRemise, tauxRemiseLigne } from "@/lib/remise";
 import { tarifsActifs } from "@/lib/services/tarifs";
@@ -32,7 +33,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
     modifiable ? tarifsActifs() : [],
     enAttente ? penuriesDevis(d.id) : [],
   ]);
-  const ttc = (ht: number, taux: number) => Math.round(ht * (100 + taux)) / 100;
+  const ttc = prixTTCDepuisHT;
 
   const actions = (
     <>
@@ -97,6 +98,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
               designation: l.designation,
               quantite: String(l.quantite),
               prixUnitaireHT: String(l.prixUnitaireHT),
+              prixUnitaireTTC: l.prixUnitaireTTC,
               tvaRate: String(l.tvaRate),
               pieceId: l.pieceId,
               tarifId: l.tarifId,
@@ -141,11 +143,11 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.quantite}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {eur(ttc(l.prixUnitaireHT, l.tvaRate))}
+                      {eur(l.prixUnitaireTTC)}
                       <div className="text-xs text-muted-foreground">{eur(l.prixUnitaireHT)} HT</div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.tvaRate} %</TableCell>
-                    <TableCell className="text-right tabular-nums">{eur(ttc(l.totalHT, l.tvaRate))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{eur(montantsLigne(l).totalTTC)}</TableCell>
                     {marges && <TableCell className="text-right tabular-nums text-muted-foreground">{l.margeHT !== undefined ? eur(l.margeHT) : "–"}</TableCell>}
                   </TableRow>
                 ))}

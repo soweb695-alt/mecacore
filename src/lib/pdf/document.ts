@@ -7,6 +7,9 @@ export interface PdfLigne {
   prixUnitaireHT: number;
   tvaRate: number;
   totalHT: number;
+  /** PU TTC et total TTC de la ligne (le TTC fait foi). Absents : déduits du HT. */
+  prixUnitaireTTC?: number;
+  totalTTC?: number;
   /** Unité de la quantité (ex. « h » pour la main d'œuvre : le prix unitaire devient un taux horaire). */
   unite?: string;
   /** Mentions discrètes sous la désignation (référence, temps et taux horaire, pièces d'un forfait, remise…). */
@@ -168,8 +171,8 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
       text(page, `${eur(l.prixUnitaireHT)}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.pu });
       text(page, `${nombre(l.tvaRate)} %`, 0, y, { right: cols.tva });
       if (d.prixTTC) {
-        text(page, `${eur(ttc(l.prixUnitaireHT, l.tvaRate))}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.puTTC });
-        text(page, eur(ttc(l.totalHT, l.tvaRate)), 0, y, { right: cols.tot, font: bold });
+        text(page, `${eur(l.prixUnitaireTTC ?? ttc(l.prixUnitaireHT, l.tvaRate))}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.puTTC });
+        text(page, eur(l.totalTTC ?? ttc(l.totalHT, l.tvaRate)), 0, y, { right: cols.tot, font: bold });
       } else {
         text(page, eur(l.totalHT), 0, y, { right: cols.tot });
       }

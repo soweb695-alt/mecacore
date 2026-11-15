@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
-import { appliquerRemisePro, calculerTotaux, formatEUR } from "@/lib/money";
+import { appliquerRemisePro, calculerTotaux, formatEUR, prixHTDepuisTTC, prixTTCDepuisHT } from "@/lib/money";
 
 type TypeLigne = "MAIN_OEUVRE" | "FORFAIT" | "PIECE" | "FRAIS_DIVERS";
 
@@ -26,6 +26,8 @@ interface Ligne {
   designation: string;
   quantite: string;
   prixUnitaireHT: string;
+  /** PU TTC : fait foi pour les totaux ; modifier le HT ou le TTC recalcule l'autre. */
+  prixTTC: string;
   tvaRate: string;
   pieceId: string | null;
   stock: number | null;
@@ -54,12 +56,14 @@ const TYPES: Record<TypeLigne, string> = { MAIN_OEUVRE: "Main d'œuvre", FORFAIT
 let compteur = 0;
 const cle = () => `f${++compteur}`;
 const num = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(",", ".")));
+/** PU HT fixé (catalogue, remise, saisie) : le TTC suit, au centime. */
+const avecHT = (ht: number, taux = 20) => ({ prixUnitaireHT: String(ht), prixTTC: String(prixTTCDepuisHT(ht, taux)) });
 const nomClientHit = (c: ClientHit) => (c.type === "PRO" && c.companyName ? c.companyName : [c.firstName, c.lastName].filter(Boolean).join(" "));
 
 export interface BrouillonInitial {
   id: string;
   client: { id: string; nom: string; pro: boolean; remisePct: number };
-  lignes: Omit<Ligne, "key">[];
+  lignes: (Omit<Ligne, "key" | "prixTTC"> & { prixUnitaireTTC?: number | null })[];
   options: OptionsFactureState;
 }
 
@@ -70,7 +74,7 @@ export interface BrouillonInitial {
 export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefaut: string; brouillon?: BrouillonInitial }) {
   const router = useRouter();
   const [client, setClient] = useState<{ id: string; nom: string; pro: boolean; remisePct: number } | null>(brouillon?.client ?? null);
-  const [lignes, setLignes] = useState<Ligne[]>(() => (brouillon?.lignes ?? []).map((l) => ({ ...l, key: cle() })));
+  const [lignes, setLignes] = useState<Ligne[]>(() => (brouillon?.lignes ?? []).map(({ prixUnitaireTTC, ...l }) => ({ ...l, key: cle(), prixTTC: String(prixUnitaireTTC ?? prixTTCDepuisHT(num(l.prixUnitaireHT), num(l.tvaRate))) })));
   const [options, setOptions] = useState<OptionsFactureState>(brouillon?.options ?? optionsInitiales);
   const [echeance, setEcheance] = useState(echeanceParDefaut);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -79,22 +83,22 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
   const fetchClients = useCallback(async (q: string) => (await api<{ items: ClientHit[] }>(`/api/clients?q=${encodeURIComponent(q)}`, "GET")).items, []);
   const fetchPieces = useCallback(async (q: string) => (await api<{ items: PieceHit[] }>(`/api/stock?q=${encodeURIComponent(q)}`, "GET")).items, []);
 
-  const sousTotaux = useMemo(() => calculerTotaux(lignes.map((l) => ({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), tvaRate: num(l.tvaRate) }))), [lignes]);
+  const sousTotaux = useMemo(() => calculerTotaux(lignes.map((l) => ({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), prixUnitaireTTC: num(l.prixTTC), tvaRate: num(l.tvaRate) }))), [lignes]);
   const a = apercu(sousTotaux, options);
 
   const maj = (k: string, p: Partial<Ligne>) => setLignes((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
-  const ajouterLibre = (type: TypeLigne) => setLignes((ls) => [...ls, { key: cle(), type, designation: "", quantite: "1", prixUnitaireHT: "0", tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null }]);
+  const ajouterLibre = (type: TypeLigne) => setLignes((ls) => [...ls, { key: cle(), type, designation: "", quantite: "1", ...avecHT(0), tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null }]);
   const ajouterPiece = (p: PieceHit) =>
     setLignes((ls) => [
       ...ls,
-      { key: cle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", prixUnitaireHT: String(appliquerRemisePro(p.prixVenteHT, client?.remisePct ?? 0)), tvaRate: "20", pieceId: p.id, stock: p.stock, prixCatalogueHT: p.prixVenteHT },
+      { key: cle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(appliquerRemisePro(p.prixVenteHT, client?.remisePct ?? 0)), tvaRate: "20", pieceId: p.id, stock: p.stock, prixCatalogueHT: p.prixVenteHT },
     ]);
 
   // La remise professionnelle suit le client : les pièces du stock sont recalculées depuis leur prix catalogue.
   function choisirClient(c: ClientHit) {
     const remisePct = c.type === "PRO" ? Number(c.discountRate) : 0;
     setClient({ id: c.id, nom: nomClientHit(c), pro: c.type === "PRO", remisePct });
-    setLignes((ls) => ls.map((l) => (l.pieceId && l.prixCatalogueHT !== null ? { ...l, prixUnitaireHT: String(appliquerRemisePro(l.prixCatalogueHT, remisePct)) } : l)));
+    setLignes((ls) => ls.map((l) => (l.pieceId && l.prixCatalogueHT !== null ? { ...l, ...avecHT(appliquerRemisePro(l.prixCatalogueHT, remisePct), num(l.tvaRate)) } : l)));
   }
 
   async function soumettre(emettre = true) {
@@ -113,6 +117,7 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
           designation: l.designation.trim(),
           quantite: num(l.quantite),
           prixUnitaireHT: num(l.prixUnitaireHT),
+          prixUnitaireTTC: num(l.prixTTC),
           tvaRate: num(l.tvaRate),
           pieceId: l.pieceId,
           prixCatalogueHT: l.type === "PIECE" && l.prixCatalogueHT !== null && client.remisePct > 0 ? l.prixCatalogueHT : null,
@@ -197,7 +202,7 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
           </div>
           {lignes.length === 0 && <p className="text-sm text-muted-foreground">Aucune ligne. Ajoutez une pièce du stock ou une ligne libre.</p>}
           {lignes.map((l) => (
-            <div key={l.key} className="grid grid-cols-2 items-end gap-2 rounded-lg border p-3 md:grid-cols-[9rem_1fr_6rem_8rem_6rem_auto]">
+            <div key={l.key} className="grid grid-cols-2 items-end gap-2 rounded-lg border p-3 md:grid-cols-[9rem_1fr_6rem_7rem_7rem_6rem_auto]">
               <Field label="Type" htmlFor={`type-${l.key}`}>
                 <NativeSelect id={`type-${l.key}`} value={l.type} disabled={!!l.pieceId || !!l.composition} onChange={(e) => maj(l.key, { type: e.target.value as TypeLigne })}>
                   {Object.entries(TYPES).map(([k, v]) => (
@@ -214,10 +219,13 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
                 <Input id={`qte-${l.key}`} inputMode="decimal" value={l.quantite} onChange={(e) => maj(l.key, { quantite: e.target.value })} />
               </Field>
               <Field label="PU HT (€)" htmlFor={`pu-${l.key}`}>
-                <Input id={`pu-${l.key}`} inputMode="decimal" value={l.prixUnitaireHT} onChange={(e) => maj(l.key, { prixUnitaireHT: e.target.value, prixCatalogueHT: l.pieceId ? l.prixCatalogueHT : null })} />
+                <Input id={`pu-${l.key}`} inputMode="decimal" value={l.prixUnitaireHT} onChange={(e) => maj(l.key, { prixUnitaireHT: e.target.value, prixTTC: String(prixTTCDepuisHT(num(e.target.value), num(l.tvaRate))), prixCatalogueHT: l.pieceId ? l.prixCatalogueHT : null })} />
+              </Field>
+              <Field label="PU TTC (€)" htmlFor={`ttc-${l.key}`}>
+                <Input id={`ttc-${l.key}`} inputMode="decimal" value={l.prixTTC} onChange={(e) => maj(l.key, { prixTTC: e.target.value, prixUnitaireHT: String(prixHTDepuisTTC(num(e.target.value), num(l.tvaRate))), prixCatalogueHT: l.pieceId ? l.prixCatalogueHT : null })} />
               </Field>
               <Field label="TVA %" htmlFor={`tva-${l.key}`}>
-                <Input id={`tva-${l.key}`} inputMode="decimal" value={l.tvaRate} onChange={(e) => maj(l.key, { tvaRate: e.target.value })} />
+                <Input id={`tva-${l.key}`} inputMode="decimal" value={l.tvaRate} onChange={(e) => maj(l.key, { tvaRate: e.target.value, prixUnitaireHT: String(prixHTDepuisTTC(num(l.prixTTC), num(e.target.value))) })} />
               </Field>
               <Button type="button" variant="ghost" size="icon" aria-label="Supprimer la ligne" onClick={() => setLignes((ls) => ls.filter((x) => x.key !== l.key))}>
                 <Trash2 aria-hidden />
