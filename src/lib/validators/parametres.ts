@@ -81,3 +81,8 @@ export function lireHoraires(v: unknown): Horaires {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
   return Object.fromEntries(JOURS.map((j) => [j, typeof o[j] === "string" ? (o[j] as string) : ""])) as Horaires;
 }
+
+const modeleEmail = z.object({ sujet: z.string().max(150, "150 caractères maximum"), corps: z.string().max(4000, "4 000 caractères maximum") });
+/** Modèles d'e-mails modifiables (« Mon Garage »). */
+export const modelesEmailSchema = z.object({ vehiculePret: modeleEmail, rappelRdv: modeleEmail });
+export type ModelesEmailInput = z.infer<typeof modelesEmailSchema>;

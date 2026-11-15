@@ -10,13 +10,6 @@ export function smsRappelRdv(p: { garage: string; debut: Date; telephone: string
   return `${p.garage} : rappel de votre rendez-vous ${quand} à ${heure(p.debut)}. Pour modifier : ${p.telephone}.`;
 }
 
-export function emailRappelRdv(p: { garage: string; debut: Date; vehicule: string; telephone: string }) {
-  return {
-    subject: `Rappel de votre rendez-vous du ${jour(p.debut)}`,
-    html: `<p>Bonjour,</p><p>Nous vous rappelons votre rendez-vous au garage <b>${esc(p.garage)}</b> le <b>${esc(jour(p.debut))}</b> à <b>${esc(heure(p.debut))}</b> pour votre véhicule ${esc(p.vehicule)}.</p><p>Pour le modifier : ${esc(p.telephone)}.</p>`,
-  };
-}
-
 export function smsCommandePrete(p: { garage: string; numero: string; telephone: string }): string {
   return `${p.garage} : votre commande ${p.numero} est prête, vous pouvez venir la retirer. Contact : ${p.telephone}.`;
 }

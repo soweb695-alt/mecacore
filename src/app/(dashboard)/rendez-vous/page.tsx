@@ -35,14 +35,14 @@ export default async function RendezVousPage({ searchParams }: { searchParams: P
     db.rendezVous.findMany({
       where: { ...(seulementMoi ? { userId: user.id } : {}), debut: { lt: parisVersUtc(`${au}T00:00`) }, fin: { gt: parisVersUtc(`${du}T00:00`) } },
       orderBy: { debut: "asc" },
-      include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, vehicule: { select: { marque: true, modele: true, immatriculation: true } }, user: { select: { firstName: true, couleur: true } }, devis: { select: { numero: true } } },
+      include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true, email: true } }, vehicule: { select: { marque: true, modele: true, immatriculation: true } }, user: { select: { firstName: true, couleur: true } }, devis: { select: { numero: true } } },
     }),
     db.user.findMany({ where: { isActive: true, ...(seulementMoi ? { id: user.id } : {}) }, select: { id: true, firstName: true, lastName: true, couleur: true }, orderBy: { firstName: "asc" } }),
   ]);
 
   const events: PlanningEvent[] = rdvs.map((r) => ({
     id: r.id, debut: utcVersParis(r.debut), fin: utcVersParis(r.fin), userId: r.userId, collaborateur: r.user.firstName,
-    clientId: r.clientId, clientNom: nomClient(r.client), vehiculeId: r.vehiculeId,
+    clientId: r.clientId, clientNom: nomClient(r.client), clientEmail: seulementMoi ? null : r.client.email, vehiculeId: r.vehiculeId,
     vehicule: `${r.vehicule.marque} ${r.vehicule.modele} · ${r.vehicule.immatriculation}`, motif: r.motif, devisId: r.devisId, devisNumero: r.devis?.numero ?? null, statut: r.statut,
   }));
   // Les collaborateurs inactifs qui portent encore des rendez-vous gardent leur couleur.
@@ -57,6 +57,7 @@ export default async function RendezVousPage({ searchParams }: { searchParams: P
         events={events}
         couleurs={couleurs}
         peutModifier={can(user, "create", "rdv")}
+        peutEnvoyer={can(user, "create", "message")}
         collaborateurs={users.map((u) => ({ id: u.id, nom: `${u.firstName} ${u.lastName}`, couleur: couleurs[u.id] }))}
       />
     </>

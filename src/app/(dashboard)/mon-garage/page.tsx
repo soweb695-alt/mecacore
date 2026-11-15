@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BanqueForm } from "@/components/parametres/banque-form";
 import { GarageForm } from "@/components/parametres/garage-form";
 import { HorairesForm } from "@/components/parametres/horaires-form";
+import { ModelesEmailForm } from "@/components/parametres/modeles-email-form";
 import { LogoUpload } from "@/components/parametres/logo-upload";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,20 @@ export default async function MonGaragePage() {
           </CardHeader>
           <CardContent>
             <HorairesForm initial={lireHoraires(g?.horaires)} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Modèles d&apos;e-mails</CardTitle>
+            <CardDescription>Textes envoyés par les boutons « Véhicule prêt » (ordre de réparation, devis) et « Rappel RDV » (planning), et par les rappels automatiques.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ModelesEmailForm
+              initial={{
+                vehiculePret: { sujet: g?.emailVehiculePretSujet ?? "", corps: g?.emailVehiculePretCorps ?? "" },
+                rappelRdv: { sujet: g?.emailRappelRdvSujet ?? "", corps: g?.emailRappelRdvCorps ?? "" },
+              }}
+            />
           </CardContent>
         </Card>
         <Card>

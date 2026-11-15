@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { DevisActions, LienDocument } from "@/components/devis/devis-actions";
 import { DevisEditor } from "@/components/devis/devis-editor";
 import { CreerFactureButton } from "@/components/factures/creer-facture-button";
+import { EnvoiEmailButton } from "@/components/envoi-email-button";
 import { PageHeader } from "@/components/page-header";
 import { LABELS, StatusBadge, TONE_DEVIS } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,9 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
   const actions = (
     <>
       {d.ordre && <LienDocument href={`/ordres-reparation/${d.ordre.id}`} libelle={d.ordre.numero} />}
+      {d.ordre && (d.ordre.statut === "A_TRAITER_MAGASIN" || d.ordre.statut === "FACTURE") && can(user, "create", "message") && (
+        <EnvoiEmailButton label="Véhicule prêt" sujet="Véhicule prêt" url={`/api/ordres-reparation/${d.ordre.id}/vehicule-pret`} client={nomClient(d.client)} email={d.client.email} />
+      )}
       {d.bonLivraison && can(user, "read", "bonLivraison") && <LienDocument href="/bons-livraison" libelle={`${d.bonLivraison.numero} (${LABELS.statutBL[d.bonLivraison.statut].toLowerCase()})`} />}
       {d.facture && can(user, "read", "facture") && (
         <Link href={`/factures/${d.facture.id}`} className="inline-flex h-9 items-center rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">

@@ -26,6 +26,8 @@ const MODELES: Record<string, string> = {
   recap_impayes: "Récapitulatif des impayés",
   rdv_rappel_j1: "Rappel de rendez-vous (J-1)",
   rdv_rappel_j7: "Rappel de rendez-vous (J-7)",
+  rdv_rappel_manuel: "Rappel de rendez-vous",
+  vehicule_pret: "Véhicule prêt",
 };
 const STATUTS_MESSAGE: Record<string, string> = { EN_COURS: "en cours", ECHEC: "échec", IGNORE: "non envoyé : service non configuré", ENVOYE: "envoyé" };
 

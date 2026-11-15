@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { smsRappelRdv, emailRappelRdv } from "@/lib/messages/templates";
+import { smsRappelRdv } from "@/lib/messages/templates";
+import { emailRappelRdvModele } from "@/lib/services/emails-client";
 import { envoyerEmail, envoyerSms, type ResultatEnvoi } from "@/lib/services/messages";
 import { ajouterJoursStr, jourParis, parisVersUtc } from "@/lib/time";
 
@@ -29,7 +30,8 @@ export async function envoyerRappelsRdv(now = new Date()) {
       if (c.canal === "SMS" && r.client.phone) {
         res = await envoyerSms({ cle, clientId: r.clientId, template: c.template, destinataire: r.client.phone, message: smsRappelRdv({ garage, debut: r.debut, telephone: tel, joursAvant: c.joursAvant! }) });
       } else if (c.canal === "EMAIL" && r.client.email) {
-        const mail = emailRappelRdv({ garage, debut: r.debut, vehicule: `${r.vehicule.marque} ${r.vehicule.modele}`, telephone: tel });
+        // Même modèle que le bouton « Rappel RDV » (modifiable dans « Mon Garage »).
+        const mail = await emailRappelRdvModele(r);
         res = await envoyerEmail({ cle, clientId: r.clientId, template: c.template, destinataire: r.client.email, ...mail });
       }
       if (res === "envoye" || res === "simulation") bilan.envoyes++;

@@ -668,6 +668,11 @@ model ParametreGarage {
   formeJuridique       String?
   capitalSocial        String?
   rcs                  String?
+  /// Modèles d'e-mails modifiables dans « Mon Garage » (vide : texte par défaut).
+  emailVehiculePretSujet String?
+  emailVehiculePretCorps String?
+  emailRappelRdvSujet    String?
+  emailRappelRdvCorps    String?
   iban                 String?
   bic                  String?
   /// Ancienne clé de stockage du logo (S3 / disque). Remplacée par `logoData`, gardée pour les logos déjà envoyés.

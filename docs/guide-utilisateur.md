@@ -51,6 +51,11 @@ Onglet **Campagnes** (Administrateur et Magasin) : créez une campagne (nom, des
 ### Planning
 **Rendez-vous** : semaine par collaborateur (une couleur chacun, rappelée dans le formulaire). **Nouveau rendez-vous** (possible depuis un devis en attente) ; un collaborateur ne peut pas avoir deux rendez-vous en même temps. Cliquez un rendez-vous pour le confirmer, le déplacer, le marquer honoré/absent ou l'annuler. Des rappels J-7 et J-1 sont envoyés automatiquement.
 
+
+### E-mails « Véhicule prêt » et « Rappel RDV »
+- **Véhicule prêt** : bouton sur l'**ordre de réparation** terminé (et sur son **devis**). Après confirmation, le client reçoit l'e-mail ; l'envoi est noté dans l'**historique** de sa fiche.
+- **Rappel RDV** : bouton dans la fiche d'un rendez-vous du **planning** (rendez-vous planifié ou confirmé).
+- Les textes se modifient dans **Mon Garage › Modèles d'e-mails** (variables {client}, {vehicule}, {immatriculation}, {date}, {heure}, {garage}, {adresse}, {telephone}, {horaires}). Un champ vide reprend le texte par défaut. Les rappels automatiques J-1 / J-7 par e-mail utilisent le même modèle.
 ### Factures : création manuelle, remise globale, virement
 - **Factures → Nouvelle facture** : facture saisie directement (sans devis ni bon de livraison). Choisissez le client, ajoutez des pièces du stock (le stock est décrémenté à l'émission ; refus si le stock est insuffisant) et des lignes libres (main d'œuvre, forfait, frais). Annuler une facture manuelle restitue le stock.
 - **Remise globale** (nouvelle facture, ou fenêtre « Créer la facture » depuis un devis ou des bons de livraison) : en **%** ou en **€**, calculée sur le **total HT** ou sur le **total TTC**. L'aperçu affiche le nouveau total ; la remise est tracée sur la facture et son PDF (total avant remise, remise, total). Elle se règle avant l'émission : une facture émise n'est plus modifiable (annulez-la et recréez-la).
@@ -61,7 +66,7 @@ Onglet **Campagnes** (Administrateur et Magasin) : créez une campagne (nom, des
 Chaque ordre de réparation a une **fiche de contrôle** remplie par le technicien (voir Atelier). Quand il la valide, elle apparaît chez vous : pastille sur « Ordres de réparation », carte dans les alertes du tableau de bord, onglet « Fiches de contrôle à traiter ». Ouvrez l'ordre pour la lire, puis **Marquer comme traitée** (ou **Renvoyer à l'atelier** pour correction).
 
 ## Administrateur uniquement
-- **Mon Garage › Coordonnées et horaires** : nom, adresse, contacts, SIRET, TVA, **forme juridique, capital social, RCS** (imprimés en pied de page des PDF), **horaires d'ouverture** par jour, logo et IBAN / BIC.
+- **Mon Garage › Coordonnées et horaires** : nom, adresse, contacts, SIRET, TVA, **forme juridique, capital social, RCS** (imprimés en pied de page des PDF), **horaires d'ouverture** par jour, **modèles d'e-mails**, logo et IBAN / BIC.
 - **Paramètres** : coordonnées bancaires (IBAN contrôlé, BIC) et liste des **points de la fiche de contrôle** (ajouter, renommer, réordonner, désactiver, supprimer). Chaque ordre reçoit une copie de la liste à la première ouverture ; modifier la liste ne change pas les fiches existantes.
 - **Tarifs** : forfaits, puis main d'œuvre, puis frais divers.
 - **Collaborateurs** : créer des comptes, changer un rôle, désactiver, réinitialiser un mot de passe, et choisir la **couleur** de chaque collaborateur (sélecteur de couleur ; sans choix, une couleur automatique est attribuée). Cette couleur sert dans le planning, la liste de choix des rendez-vous et le graphique « CA par collaborateur ».

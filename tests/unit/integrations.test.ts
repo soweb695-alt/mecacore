@@ -3,7 +3,8 @@ import { envoyerEmailBrevo } from "@/lib/integrations/brevo";
 import { getFactureProvider } from "@/lib/integrations/facture-electronique";
 import { envoyerSmsPartner, normaliserTelephone } from "@/lib/integrations/sms-partner";
 import { decoderVin } from "@/lib/integrations/vin";
-import { emailRappelRdv, emailRecapImpayes, esc, smsCommandePrete, smsRappelRdv } from "@/lib/messages/templates";
+import { emailRecapImpayes, esc, smsCommandePrete, smsRappelRdv } from "@/lib/messages/templates";
+import { MODELES_DEFAUT, modele, rendreModele, texteHoraires } from "@/lib/messages/modeles-email";
 import { genererPdf } from "@/lib/pdf/document";
 import { getFichier, putFichier, typeImage } from "@/lib/storage";
 
@@ -88,9 +89,20 @@ describe("facture électronique", () => {
 describe("modèles de messages", () => {
   it("échappent le HTML des données client", () => {
     expect(esc(`<script>alert("x")</script>&'`)).toBe("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;&#39;");
-    const mail = emailRappelRdv({ garage: "<b>G</b>", debut: new Date("2026-11-10T08:00:00Z"), vehicule: "<img src=x>", telephone: "0102030405" });
+    const mail = rendreModele(MODELES_DEFAUT.rappelRdv, { garage: "<b>G</b>", vehicule: "<img src=x>", client: "A", immatriculation: "AB", date: "lundi", heure: "9:00", adresse: "", telephone: "01", horaires: "" });
     expect(mail.html).not.toContain("<img");
     expect(mail.html).not.toContain("<b>G</b>");
+  });
+  it("modèles modifiables : variables remplacées, texte saisi échappé, paragraphes conservés, défaut si vide", () => {
+    const m = modele("vehiculePret", { sujet: "Prêt : {immatriculation}", corps: "Bonjour {client} <3\n\nÀ bientôt\n{garage}" });
+    const r = rendreModele(m, { immatriculation: "AB-123-CD", client: "Jean", garage: "G&Co" });
+    expect(r.subject).toBe("Prêt : AB-123-CD");
+    expect(r.html).toBe("<p>Bonjour Jean &lt;3</p><p>À bientôt<br>G&amp;Co</p>");
+    expect(modele("rappelRdv", { sujet: "  ", corps: null })).toEqual(MODELES_DEFAUT.rappelRdv);
+    expect(rendreModele({ sujet: "{inconnue}", corps: "x" }, {}).subject).toBe("{inconnue}");
+  });
+  it("met les horaires en forme, sans les jours vides", () => {
+    expect(texteHoraires({ lundi: "08:00-18:00", mardi: "", dimanche: "fermé" })).toBe("Lundi : 08:00-18:00\nDimanche : fermé");
   });
   it("formatent SMS et récapitulatif", () => {
     const d = new Date("2026-11-10T13:00:00Z");
