@@ -26,7 +26,7 @@ export function pieceVue(p: PieceRow, user: PermissionUser) {
     prixVenteHT: vente,
     ...(achatVisible ? { prixAchatHT: achat } : {}),
     ...(marges ? { margePct: vente > 0 ? Math.round(((vente - achat) / vente) * 100) : 0 } : {}),
-    enAlerte: p.stock <= p.seuilAlerte,
+    enAlerte: p.alerteActive && p.stock <= p.seuilAlerte,
   };
 }
 
@@ -42,6 +42,7 @@ export function pieceData(b: PieceInput, user: PermissionUser, creation: boolean
     prixVenteHT: b.prixVenteHT,
     stock: b.stock,
     seuilAlerte: b.seuilAlerte,
+    ...(b.alerteActive !== undefined ? { alerteActive: b.alerteActive } : {}),
     taillePneu: nn(b.taillePneu),
     referencesCroisees: Array.from(new Set(b.referencesCroisees.map((r) => r.toUpperCase()))),
   };
@@ -84,7 +85,7 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
   // "Sous le seuil" : comparaison entre deux colonnes → on filtre via SQL brut sur les identifiants.
   let where = base;
   if (opts.bas) {
-    const ids = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Piece" WHERE "isActive" = true AND stock <= "seuilAlerte"`;
+    const ids = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Piece" WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte"`;
     where = { AND: [base, { id: { in: ids.map((r) => r.id) } }] };
   }
   const alertes = await compterAlertes();
@@ -116,12 +117,12 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
 }
 
 export async function compterAlertes(): Promise<number> {
-  const r = await db.$queryRaw<{ n: bigint }[]>`SELECT COUNT(*)::bigint AS n FROM "Piece" WHERE "isActive" = true AND stock <= "seuilAlerte"`;
+  const r = await db.$queryRaw<{ n: bigint }[]>`SELECT COUNT(*)::bigint AS n FROM "Piece" WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte"`;
   return Number(r[0]?.n ?? 0);
 }
 
 export async function piecesEnAlerte(limit = 5) {
   return db.$queryRaw<{ id: string; nom: string; stock: number; seuilAlerte: number }[]>`
     SELECT id, nom, stock, "seuilAlerte" FROM "Piece"
-    WHERE "isActive" = true AND stock <= "seuilAlerte" ORDER BY (stock - "seuilAlerte") ASC, nom ASC LIMIT ${limit}`;
+    WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte" ORDER BY (stock - "seuilAlerte") ASC, nom ASC LIMIT ${limit}`;
 }

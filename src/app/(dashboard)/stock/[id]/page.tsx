@@ -62,6 +62,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
                     prixVenteHT: p.prixVenteHT,
                     stock: p.stock,
                     seuilAlerte: p.seuilAlerte,
+                    alerteActive: p.alerteActive,
                     taillePneu: p.taillePneu,
                     referencesCroisees: p.referencesCroisees,
                   }}
@@ -92,7 +93,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="text-3xl font-semibold">{p.stock}</div>
-            <StatusBadge tone={p.enAlerte ? "warn" : "ok"}>{p.enAlerte ? `Sous le seuil (${p.seuilAlerte})` : `Seuil d'alerte : ${p.seuilAlerte}`}</StatusBadge>
+            <StatusBadge tone={p.enAlerte ? "warn" : "ok"}>{!p.alerteActive ? "Alerte de seuil désactivée" : p.enAlerte ? `Sous le seuil (${p.seuilAlerte})` : `Seuil d'alerte : ${p.seuilAlerte}`}</StatusBadge>
           </CardContent>
         </Card>
         <Card>

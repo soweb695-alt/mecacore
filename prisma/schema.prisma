@@ -237,6 +237,8 @@ model Piece {
   prixVenteHT        Decimal  @default(0) @db.Decimal(10, 2)
   stock              Int      @default(0)
   seuilAlerte        Int      @default(0)
+  /// Faux : la pièce ne déclenche aucune alerte de seuil (liste, tableau de bord, devis) ni bon de commande automatique.
+  alerteActive       Boolean  @default(true)
   taillePneu         String?
   referencesCroisees String[]
   isActive           Boolean  @default(true)

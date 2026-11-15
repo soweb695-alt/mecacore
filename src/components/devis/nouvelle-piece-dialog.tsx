@@ -20,6 +20,7 @@ export interface PieceCreee {
   prixAchatHT?: number;
   stock: number;
   seuilAlerte: number;
+  alerteActive?: boolean;
 }
 
 const VIDE = { reference: "", nom: "", prixAchatHT: "", prixVenteHT: "", stock: "0" };

@@ -90,6 +90,8 @@ interface PieceHit {
   prixVenteHT: number;
   stock: number;
   seuilAlerte?: number;
+  /** Faux : alerte de seuil désactivée sur la pièce. */
+  alerteActive?: boolean;
   prixAchatHT?: number;
   /** Référence croisée saisie : la pièce en est l'équivalent (référence principale = `reference`). */
   referenceCroisee?: string | null;
@@ -224,7 +226,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
     const pu = appliquerRemisePro(p.prixVenteHT, remise);
     setLignes((ls) => [
       ...ls,
-      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(pu, TVA), tvaRate: String(TVA), pieceId: p.id, stock: p.stock, seuilAlerte: p.seuilAlerte ?? null, prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
+      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(pu, TVA), tvaRate: String(TVA), pieceId: p.id, stock: p.stock, seuilAlerte: "alerteActive" in p && p.alerteActive === false ? null : (p.seuilAlerte ?? null), prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
     ]);
   }
 

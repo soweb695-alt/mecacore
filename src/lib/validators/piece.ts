@@ -12,6 +12,8 @@ export const pieceSchema = z.object({
   /** Peut être négatif : un devis validé malgré un stock insuffisant laisse des pièces dues. */
   stock: z.number().int("Nombre entier requis").min(-100000, "Stock invalide").max(100000),
   seuilAlerte: z.number().int("Nombre entier requis").min(0).max(100000),
+  /** Alerte de seuil activée pour cette pièce (par défaut : oui). */
+  alerteActive: z.boolean().optional(),
   taillePneu: z
     .union([z.literal(""), z.string().trim().toUpperCase().regex(/^\d{3}\/\d{2} ?Z?R ?\d{2}$/, "Format attendu : 205/55 R16")])
     .optional(),

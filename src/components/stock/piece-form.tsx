@@ -26,6 +26,7 @@ export interface PieceFormPiece {
   prixVenteHT: number;
   stock: number;
   seuilAlerte: number;
+  alerteActive?: boolean;
   taillePneu: string | null;
   referencesCroisees: string[];
 }
@@ -49,6 +50,7 @@ export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAc
       prixVenteHT: piece?.prixVenteHT ?? 0,
       stock: piece?.stock ?? 0,
       seuilAlerte: piece?.seuilAlerte ?? 0,
+      alerteActive: piece?.alerteActive ?? true,
       taillePneu: piece?.taillePneu ?? "",
       refs: piece?.referencesCroisees.join(", ") ?? "",
     },
@@ -105,6 +107,13 @@ export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAc
         <Field label="Seuil d'alerte" htmlFor="seuilAlerte" error={errors.seuilAlerte?.message}>
           <Input id="seuilAlerte" type="number" aria-invalid={!!errors.seuilAlerte} {...num("seuilAlerte")} />
         </Field>
+        <label className="col-span-full flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5 size-4 accent-primary" {...register("alerteActive")} />
+          <span>
+            Alerter quand le stock atteint le seuil
+            <span className="block text-xs text-muted-foreground">Décoché : aucune alerte (liste, tableau de bord, devis) ni bon de commande automatique pour cette pièce.</span>
+          </span>
+        </label>
       </div>
       <Field label="Taille de pneu (optionnel)" htmlFor="taillePneu" error={errors.taillePneu?.message}>
         <Input id="taillePneu" placeholder="205/55 R16" aria-invalid={!!errors.taillePneu} {...register("taillePneu")} />

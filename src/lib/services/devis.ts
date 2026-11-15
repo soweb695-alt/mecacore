@@ -314,7 +314,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       client: true,
       vehicule: true,
       user: { select: { firstName: true, lastName: true } },
-      lignes: { orderBy: { position: "asc" }, include: { piece: { select: { reference: true, prixAchatHT: true, stock: true, seuilAlerte: true } } } },
+      lignes: { orderBy: { position: "asc" }, include: { piece: { select: { reference: true, prixAchatHT: true, stock: true, seuilAlerte: true, alerteActive: true } } } },
       ordre: { select: { id: true, numero: true, statut: true } },
       facture: { select: { id: true, numero: true } },
       bonLivraison: { select: { id: true, numero: true, statut: true, factureId: true } },
@@ -338,7 +338,8 @@ export async function lireDevis(id: string, user: PermissionUser) {
       pieceId: l.pieceId,
       reference: l.piece?.reference ?? null,
       stock: l.piece?.stock ?? null,
-      seuilAlerte: l.piece?.seuilAlerte ?? null,
+      // Alerte désactivée sur la pièce : pas de seuil transmis à l'éditeur.
+      seuilAlerte: l.piece?.alerteActive ? l.piece.seuilAlerte : null,
       tarifId: l.tarifId,
       piecesComprises: lireComposition(l.composition),
       ...(marges && achat !== null ? { prixAchatHT: achat, margeHT: Math.round((Number(l.totalHT) - achat * Number(l.quantite)) * 100) / 100 } : {}),
