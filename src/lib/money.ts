@@ -112,3 +112,13 @@ export function appliquerRemiseGlobale(t: Totaux, r: RemiseGlobale | null | unde
   }
   return { totalHT: fromCents(newHT), totalTVA: fromCents(newTVA), totalTTC: fromCents(newHT + newTVA), montantRemise: fromCents(d), totalHTAvantRemise: t.totalHT };
 }
+
+/** Marge sur prix de vente HT : montant (€ HT) et taux sur le prix de vente (%, 1 décimale). */
+export function calculerMarge(venteHT: number, achatHT: number): { montant: number; pct: number } {
+  const montant = fromCents(toCents(venteHT) - toCents(achatHT));
+  return { montant, pct: venteHT > 0 ? Math.round((montant / venteHT) * 1000) / 10 : 0 };
+}
+
+/** « 12,40 € HT · 31 % » */
+export const formatMarge = (m: { montant: number; pct: number }): string =>
+  `${formatEUR(m.montant)} HT · ${m.pct.toLocaleString("fr-FR")} %`;

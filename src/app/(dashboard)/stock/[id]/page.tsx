@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { eur } from "@/lib/format";
-import { can, canSeePurchasePrice } from "@/lib/permissions";
+import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
 import { pieceVue } from "@/lib/services/pieces";
 import { requirePage } from "@/lib/session";
 
@@ -51,6 +51,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
               >
                 <PieceForm
                   voirAchat={achat}
+                  voirMarge={canSeeMargins(user)}
                   piece={{
                     id: p.id,
                     reference: p.reference,

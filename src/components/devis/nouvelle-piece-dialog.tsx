@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client-api";
-import { formatEUR, round2 } from "@/lib/money";
+import { calculerMarge, formatEUR, formatMarge, prixTTCDepuisHT } from "@/lib/money";
 import { pieceCreationSchema } from "@/lib/validators/piece";
 
 /** Pièce renvoyée par l'API du stock après création. */
@@ -30,7 +30,7 @@ const num = (s: string) => (s.trim() === "" ? NaN : Number(s.replace(",", ".")))
  * Création rapide d'une pièce depuis l'éditeur de devis : enregistrée dans le stock, puis ajoutée au devis en cours.
  * Le prix d'achat n'est demandé qu'aux rôles qui le voient (administrateur, Magasin).
  */
-export function NouvellePieceDialog({ open, onOpenChange, voirAchat, onCreee }: { open: boolean; onOpenChange: (o: boolean) => void; voirAchat: boolean; onCreee: (p: PieceCreee) => void }) {
+export function NouvellePieceDialog({ open, onOpenChange, voirAchat, voirMarge = false, onCreee }: { open: boolean; onOpenChange: (o: boolean) => void; voirAchat: boolean; voirMarge?: boolean; onCreee: (p: PieceCreee) => void }) {
   const [v, setV] = useState(VIDE);
   const [erreurs, setErreurs] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -77,6 +77,9 @@ export function NouvellePieceDialog({ open, onOpenChange, voirAchat, onCreee }: 
   }
 
   const venteHT = num(v.prixVenteHT);
+  const achatHT = v.prixAchatHT.trim() === "" ? 0 : num(v.prixAchatHT);
+  const apercu = Number.isFinite(venteHT) && venteHT > 0;
+  const marge = voirMarge && voirAchat && apercu && Number.isFinite(achatHT) ? calculerMarge(venteHT, achatHT) : null;
 
   return (
     <Dialog open={open} onOpenChange={fermer}>
@@ -107,11 +110,16 @@ export function NouvellePieceDialog({ open, onOpenChange, voirAchat, onCreee }: 
               label="Prix de vente HT (€)"
               htmlFor="np-vente"
               error={erreurs.prixVenteHT}
-              hint={Number.isFinite(venteHT) && venteHT > 0 ? `Soit ${formatEUR(round2(venteHT * 1.2))} TTC (TVA 20 %)` : undefined}
+              hint={apercu ? `Soit ${formatEUR(prixTTCDepuisHT(venteHT, 20))} TTC (TVA 20 %)` : undefined}
             >
               <Input id="np-vente" inputMode="decimal" value={v.prixVenteHT} onChange={set("prixVenteHT")} aria-invalid={!!erreurs.prixVenteHT} />
             </Field>
           </div>
+          {marge && (
+            <p className="text-sm tabular-nums" aria-live="polite">
+              Marge <b className={marge.montant < 0 ? "text-destructive" : undefined}>{formatMarge(marge)}</b>
+            </p>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => fermer(false)}>
               Annuler

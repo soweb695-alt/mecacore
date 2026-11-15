@@ -82,7 +82,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                 </Button>
               }
             >
-              <PieceForm voirAchat={achat} />
+              <PieceForm voirAchat={achat} voirMarge={marges} />
             </FormDialog>
             )}
           </>

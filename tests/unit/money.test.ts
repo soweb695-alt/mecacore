@@ -72,3 +72,12 @@ describe("le TTC saisi fait foi (bug DEV-2026-0006 : 35,00 € affiché 34,99 �
     expect(prixLigne({ quantite: 1, prixUnitaireHT: 999, prixUnitaireTTC: 35, tvaRate: 20 })).toEqual({ prixUnitaireTTC: 35, prixUnitaireHT: 29.17, totalHT: 29.17 });
   });
 });
+
+describe("marge", () => {
+  it("en euros et en pourcentage du prix de vente", async () => {
+    const { calculerMarge, formatMarge } = await import("@/lib/money");
+    expect(calculerMarge(49.9, 28.4)).toEqual({ montant: 21.5, pct: 43.1 });
+    expect(calculerMarge(0, 5)).toEqual({ montant: -5, pct: 0 });
+    expect(formatMarge({ montant: 21.5, pct: 43.1 }).replace(/\s/g, " ")).toBe("21,50 € HT · 43,1 %");
+  });
+});

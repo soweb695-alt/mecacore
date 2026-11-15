@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
-import { appliquerRemisePro, calculerTotaux, formatEUR, montantsLigne, prixHTDepuisTTC, prixTTCDepuisHT, round2 } from "@/lib/money";
+import { appliquerRemisePro, calculerMarge, calculerTotaux, formatEUR, formatMarge, montantsLigne, prixHTDepuisTTC, prixTTCDepuisHT, round2 } from "@/lib/money";
 import { tauxRemiseLigne } from "@/lib/remise";
 import { devisSchema } from "@/lib/validators/devis";
 
@@ -199,10 +199,15 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   const marge = useMemo(() => {
     if (!voirMarges) return null;
     let m = 0;
+    let ventes = 0;
     for (const l of lignes) {
-      if (l.type === "PIECE" && l.prixAchatHT !== undefined) m += montants(l).totalHT - l.prixAchatHT * num(l.quantite);
+      if (l.type === "PIECE" && l.prixAchatHT !== undefined) {
+        const ht = montants(l).totalHT;
+        m += ht - l.prixAchatHT * num(l.quantite);
+        ventes += ht;
+      }
     }
-    return round2(m);
+    return { montant: round2(m), pct: ventes > 0 ? Math.round((m / ventes) * 1000) / 10 : 0 };
   }, [lignes, voirMarges]);
 
   function maj(key: string, patch: Partial<LigneState>) {
@@ -486,6 +491,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                   </span>
                   <span className={p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}>
                     {formatEUR(versTTC(p.prixVenteHT, TVA))} TTC · stock {p.stock}
+                    {voirMarges && p.prixAchatHT !== undefined && <span className="block text-xs">Marge {formatMarge(calculerMarge(appliquerRemisePro(p.prixVenteHT, remise), p.prixAchatHT))}</span>}
                   </span>
                 </span>
               )}
@@ -523,7 +529,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                   <th className="w-28 px-2 py-2 font-medium">PU TTC</th>
                   <th className="w-20 px-2 py-2 font-medium">TVA %</th>
                   <th className="w-28 px-2 py-2 text-right font-medium">Total TTC</th>
-                  {voirMarges && <th className="w-24 px-2 py-2 text-right font-medium">Marge HT</th>}
+                  {voirMarges && <th className="w-24 px-2 py-2 text-right font-medium">Marge</th>}
                   <th className="w-10 rounded-r-lg px-2 py-2" />
                 </tr>
               </thead>
@@ -572,7 +578,12 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                         {formatEUR(ml.totalTTC)}
                         <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{formatEUR(ml.totalHT)} HT</p>
                       </td>
-                      {voirMarges && <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{m === null ? "–" : formatEUR(m)}</td>}
+                      {voirMarges && (
+                        <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">
+                          {m === null ? "–" : formatEUR(m)}
+                          {m !== null && ml.totalHT > 0 && <p className="mt-1 text-[11px] leading-tight">{(Math.round((m / ml.totalHT) * 1000) / 10).toLocaleString("fr-FR")} %</p>}
+                        </td>
+                      )}
                       <td className="px-1 py-1.5">
                         <Button type="button" variant="ghost" size="icon-sm" aria-label="Supprimer la ligne" onClick={() => setLignes((ls) => ls.filter((x) => x.key !== l.key))}>
                           <Trash2 aria-hidden />
@@ -601,7 +612,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
             {marge !== null && (
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Marge sur pièces</span>
-                <span className="tabular-nums">{formatEUR(marge)}</span>
+                <span className="tabular-nums">{formatMarge(marge)}</span>
               </div>
             )}
           </div>
@@ -623,7 +634,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
       </div>
       {statut === "ENVOYE" && <p className="text-right text-xs text-muted-foreground">Ce devis a déjà été envoyé : « Enregistrer en brouillon » le repasse en brouillon, à renvoyer au client.</p>}
 
-      <NouvellePieceDialog open={nouvellePiece} onOpenChange={setNouvellePiece} voirAchat={voirAchat} onCreee={ajouterPiece} />
+      <NouvellePieceDialog open={nouvellePiece} onOpenChange={setNouvellePiece} voirAchat={voirAchat} voirMarge={voirMarges} onCreee={ajouterPiece} />
 
       <Dialog open={nouveauClient} onOpenChange={setNouveauClient}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
