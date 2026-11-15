@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { LienTelechargement } from "@/components/telechargement";
 import { ImportPieces } from "@/components/stock/import-pieces";
 import { PieceForm } from "@/components/stock/piece-form";
+import { VignettePiece } from "@/components/stock/piece-image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             {res.items.map((p) => (
               <TableRow key={p.id} className={p.enAlerte ? "bg-warning-bg/40" : undefined}>
                 <TableCell className="font-medium">
-                  <Link href={`/stock/${p.id}`} className="hover:underline">
+                  <Link href={`/stock/${p.id}`} className="flex items-center gap-2 hover:underline">
+                    <VignettePiece id={p.id} version={p.imageMaj} nom={p.nom} />
                     {p.reference}
                   </Link>
                 </TableCell>

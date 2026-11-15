@@ -7,6 +7,7 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { PieceForm } from "@/components/stock/piece-form";
+import { PieceImage } from "@/components/stock/piece-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
@@ -87,7 +88,15 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
           </>
         }
       />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Image</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieceImage id={p.id} nom={p.nom} version={p.imageMaj ? p.imageMaj.toISOString() : null} modifiable={can(user, "update", "piece")} />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Stock</CardTitle>

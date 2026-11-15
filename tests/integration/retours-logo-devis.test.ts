@@ -14,6 +14,7 @@ import { DELETE as retourDelete, PATCH as retourPatch } from "@/app/api/retours/
 import { GET as ordresGet } from "@/app/api/retours/ordres/route";
 import { POST as piecePost } from "@/app/api/stock/route";
 import { PATCH as piecePatch } from "@/app/api/stock/[id]/route";
+import { DELETE as imageDelete, GET as imageGet, POST as imagePost } from "@/app/api/stock/[id]/image/route";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
 import { pdfDevis } from "@/lib/pdf/devis";
 import { garagePdf } from "@/lib/pdf/lignes";
@@ -92,6 +93,36 @@ describe("logo du garage (stocké en base, sans S3)", () => {
     expect((await r.json()).error.code).toBe("FORMAT_INVALIDE");
     courant = sec();
     expect((await logoPost(envoiLogo(PNG), ctx())).status).toBe(403);
+  });
+});
+
+describe("image produit (une par pièce, stockée en base)", () => {
+  const envoi = (id: string, contenu: Buffer) => {
+    const fd = new FormData();
+    fd.append("image", new File([new Uint8Array(contenu)], "piece.png", { type: "image/png" }));
+    return new NextRequest(`http://localhost/api/stock/${id}/image`, { method: "POST", headers: { host: "localhost" }, body: fd });
+  };
+
+  it("enregistre, sert puis retire l'image ; la date d'envoi sert de version", async () => {
+    expect((await imagePost(envoi(b.p1.id, PNG), ctx({ id: b.p1.id }))).status).toBe(200);
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).imageMaj).toBeInstanceOf(Date);
+    const r = await imageGet(req(`/api/stock/${b.p1.id}/image`), ctx({ id: b.p1.id }));
+    expect(r.headers.get("content-type")).toBe("image/png");
+    expect(Buffer.from(await r.arrayBuffer()).equals(PNG)).toBe(true);
+    // Le mécanicien n'a pas accès au stock : envoi refusé.
+    courant = meca();
+    expect((await imagePost(envoi(b.p1.id, PNG), ctx({ id: b.p1.id }))).status).toBe(403);
+    courant = admin();
+    expect((await imageDelete(req(`/api/stock/${b.p1.id}/image`, "DELETE"), ctx({ id: b.p1.id }))).status).toBe(200);
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).imageMaj).toBeNull();
+    expect((await imageGet(req(`/api/stock/${b.p1.id}/image`), ctx({ id: b.p1.id }))).status).toBe(404);
+  });
+
+  it("refuse un format autre que PNG, JPEG ou WebP, et une image de plus de 2 Mo", async () => {
+    const r = await imagePost(envoi(b.p1.id, Buffer.from("GIF89a-pas-une-image")), ctx({ id: b.p1.id }));
+    expect((await r.json()).error.code).toBe("FORMAT_INVALIDE");
+    const gros = Buffer.concat([PNG, Buffer.alloc(2_100_000)]);
+    expect((await imagePost(envoi(b.p1.id, gros), ctx({ id: b.p1.id }))).status).toBe(413);
   });
 });
 

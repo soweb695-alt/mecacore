@@ -239,6 +239,8 @@ model Piece {
   seuilAlerte        Int      @default(0)
   /// Faux : la pièce ne déclenche aucune alerte de seuil (liste, tableau de bord, devis) ni bon de commande automatique.
   alerteActive       Boolean  @default(true)
+  /// Date du dernier envoi d'image (null : pas d'image). Sert aussi de version pour le cache navigateur.
+  imageMaj           DateTime?
   taillePneu         String?
   referencesCroisees String[]
   isActive           Boolean  @default(true)
@@ -250,9 +252,20 @@ model Piece {
   lignesCommande  LigneBonCommande[]
   lignesLivraison LigneBonLivraison[]
   retours         RetourPiece[]
+  image           PieceImage?
 
   @@index([nom])
   @@index([categorie])
+}
+
+/// Image d'une pièce, stockée en base (fonctionne sans S3, disque en lecture seule sur Vercel) et à part de Piece
+/// pour que les listes ne chargent jamais les octets.
+model PieceImage {
+  pieceId String @id
+  data    Bytes
+  mime    String
+
+  piece Piece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
 }
 
 model Devis {
