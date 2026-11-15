@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { Pagination } from "@/components/pagination";
 import { FacturesTable } from "@/components/factures/factures-table";
 import { LABELS } from "@/components/status-badge";
 import { Plus } from "lucide-react";
@@ -12,10 +11,11 @@ import { NativeSelect } from "@/components/ui/native-select";
 import type { Prisma } from "@/generated/prisma/client";
 import { filtreClient } from "@/lib/client-search";
 import { db } from "@/lib/db";
-import { dateFR, eur, nomClient } from "@/lib/format";
+import { eur, nomClient } from "@/lib/format";
 import { rafraichirStatuts } from "@/lib/services/factures";
 import { can } from "@/lib/permissions";
 import { requirePage } from "@/lib/session";
+import { lireTri } from "@/lib/tri";
 import { cn } from "@/lib/utils";
 import { factureListQuery } from "@/lib/validators/facture";
 
@@ -32,9 +32,21 @@ export default async function FacturesPage({ searchParams }: { searchParams: Pro
     ...(query.statut ? { statut: query.statut } : {}),
     ...(query.q ? { OR: [{ numero: { contains: query.q, mode: "insensitive" } }, { client: filtreClient(query.q) }] } : {}),
   };
+  const tri = lireTri<Prisma.FactureOrderByWithRelationInput[]>(
+    sp,
+    {
+      numero: (o) => [{ numero: o }],
+      client: (o) => [{ client: { lastName: o } }, { client: { companyName: o } }],
+      emission: (o) => [{ dateEmission: o }],
+      echeance: (o) => [{ dateEcheance: o }],
+      statut: (o) => [{ statut: o }, { dateEmission: "desc" }],
+      totalTTC: (o) => [{ totalTTC: o }],
+    },
+    [{ statut: "asc" }, { dateEmission: "desc" }],
+  );
   const [total, items, impayes] = await Promise.all([
     db.facture.count({ where }),
-    db.facture.findMany({ where, orderBy: [{ statut: "asc" }, { dateEmission: "desc" }], skip: (query.page - 1) * TAILLE, take: TAILLE, include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } } } }),
+    db.facture.findMany({ where, orderBy: tri.orderBy, skip: (query.page - 1) * TAILLE, take: TAILLE, include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } } } }),
     db.facture.findMany({ where: { statut: "IMPAYEE" }, select: { totalTTC: true, montantPaye: true } }),
   ]);
   const totalImpaye = impayes.reduce((s, f) => s + Number(f.totalTTC) - Number(f.montantPaye), 0);
@@ -70,19 +82,19 @@ export default async function FacturesPage({ searchParams }: { searchParams: Pro
       <Card className="p-2">
         <FacturesTable
           peutExporter={can(user, "export", "facture")}
+          serveur={{ page: query.page, pages: Math.max(1, Math.ceil(total / TAILLE)), total, tri: tri.tri, ordre: tri.ordre }}
           rows={items.map((f) => ({
             id: f.id,
             numero: f.numero,
             client: nomClient(f.client),
-            emission: f.statut === "BROUILLON" ? "–" : dateFR(f.dateEmission),
-            echeance: dateFR(f.dateEcheance),
+            emission: f.statut === "BROUILLON" ? null : f.dateEmission.toISOString(),
+            echeance: f.dateEcheance.toISOString(),
             statut: f.statut,
-            totalTTC: eur(f.totalTTC.toString()),
-            reste: f.statut === "ANNULEE" || f.statut === "BROUILLON" ? null : eur(Number(f.totalTTC) - Number(f.montantPaye)),
+            totalTTC: Number(f.totalTTC),
+            reste: f.statut === "ANNULEE" || f.statut === "BROUILLON" ? null : Math.round((Number(f.totalTTC) - Number(f.montantPaye)) * 100) / 100,
           }))}
         />
       </Card>
-      <Pagination page={query.page} pages={Math.max(1, Math.ceil(total / TAILLE))} basePath="/factures" params={{ q: sp.q, statut: sp.statut }} />
     </>
   );
 }

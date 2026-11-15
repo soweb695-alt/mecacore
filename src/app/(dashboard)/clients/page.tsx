@@ -1,21 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ChevronRight, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { ClientForm } from "@/components/clients/client-form";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Pagination } from "@/components/pagination";
-import { StatusBadge } from "@/components/status-badge";
+import { ClientsTable } from "@/components/clients/clients-table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { eur, nomClient } from "@/lib/format";
+import type { Prisma } from "@/generated/prisma/client";
+import { nomClient } from "@/lib/format";
 import { rechercherClients } from "@/lib/services/clients";
 import { requirePage } from "@/lib/session";
 import { clientListQuery } from "@/lib/validators/client";
 import { can } from "@/lib/permissions";
+import { lireTri } from "@/lib/tri";
 
 export const metadata: Metadata = { title: "Clients" };
 
@@ -24,7 +23,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const parsed = clientListQuery.safeParse({ q: sp.q || undefined, type: sp.type || undefined, page: sp.page ?? 1 });
   const query = parsed.success ? parsed.data : { page: 1 };
-  const res = await rechercherClients(query);
+  const tri = lireTri<Prisma.ClientOrderByWithRelationInput[]>(
+    sp,
+    { nom: (o) => [{ lastName: o }, { companyName: o }, { firstName: o }], type: (o) => [{ type: o }, { lastName: "asc" }], marketing: (o) => [{ marketingOptIn: o }, { lastName: "asc" }] },
+    [{ lastName: "asc" }, { companyName: "asc" }],
+  );
+  const res = await rechercherClients({ ...query, orderBy: tri.orderBy });
 
   return (
     <>
@@ -59,54 +63,20 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         </Button>
       </form>
       <Card className="p-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Client</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Téléphone</TableHead>
-              <TableHead>Véhicules</TableHead>
-              <TableHead className="text-right">CA cumulé</TableHead>
-              <TableHead>Marketing</TableHead>
-              <TableHead className="w-8" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {res.items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  Aucun client ne correspond à votre recherche.
-                </TableCell>
-              </TableRow>
-            )}
-            {res.items.map((c) => (
-              <TableRow key={c.id} className="hover:bg-muted/40">
-                <TableCell>
-                  <Link href={`/clients/${c.id}`} className="font-medium hover:underline">
-                    {nomClient(c)}
-                  </Link>
-                  <div className="text-xs text-muted-foreground">{c.type === "PRO" && c.siret ? `SIRET ${c.siret}` : c.email}</div>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge tone={c.type === "PRO" ? "info" : "neutral"}>{c.type === "PRO" ? "Pro" : "Particulier"}</StatusBadge>
-                </TableCell>
-                <TableCell>{c.phone ?? "–"}</TableCell>
-                <TableCell>{c._count.vehicules}</TableCell>
-                <TableCell className="text-right tabular-nums">{eur(c.ca)}</TableCell>
-                <TableCell>
-                  <StatusBadge tone={c.marketingOptIn ? "ok" : "neutral"}>{c.marketingOptIn ? "Opt-in" : "Non"}</StatusBadge>
-                </TableCell>
-                <TableCell>
-                  <Link href={`/clients/${c.id}`} aria-label={`Ouvrir la fiche de ${nomClient(c)}`}>
-                    <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ClientsTable
+          serveur={{ page: query.page, pages: res.pages, total: res.total, tri: tri.tri, ordre: tri.ordre }}
+          rows={res.items.map((c) => ({
+            id: c.id,
+            nom: nomClient(c),
+            detail: c.type === "PRO" && c.siret ? `SIRET ${c.siret}` : c.email,
+            type: c.type,
+            telephone: c.phone,
+            vehicules: c._count.vehicules,
+            ca: c.ca,
+            marketing: c.marketingOptIn,
+          }))}
+        />
       </Card>
-      <Pagination page={query.page} pages={res.pages} basePath="/clients" params={{ q: sp.q, type: sp.type }} />
     </>
   );
 }

@@ -2,19 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { Pagination } from "@/components/pagination";
-import { LABELS, StatusBadge, TONE_DEVIS } from "@/components/status-badge";
+import { DevisTable } from "@/components/devis/devis-table";
+import { LABELS } from "@/components/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Prisma } from "@/generated/prisma/client";
 import { filtreClient } from "@/lib/client-search";
 import { db } from "@/lib/db";
-import { dateFR, eur, nomClient } from "@/lib/format";
+import { nomClient } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { requirePage } from "@/lib/session";
+import { lireTri } from "@/lib/tri";
 import { cn } from "@/lib/utils";
 import { devisListQuery } from "@/lib/validators/devis";
 
@@ -38,11 +38,22 @@ export default async function DevisPage({ searchParams }: { searchParams: Promis
         }
       : {}),
   };
+  const tri = lireTri<Prisma.DevisOrderByWithRelationInput[]>(
+    sp,
+    {
+      numero: (o) => [{ numero: o }],
+      client: (o) => [{ client: { lastName: o } }, { client: { companyName: o } }],
+      date: (o) => [{ dateCreation: o }],
+      statut: (o) => [{ statut: o }, { dateCreation: "desc" }],
+      totalTTC: (o) => [{ totalTTC: o }],
+    },
+    [{ dateCreation: "desc" }],
+  );
   const [total, items] = await Promise.all([
     db.devis.count({ where }),
     db.devis.findMany({
       where,
-      orderBy: { dateCreation: "desc" },
+      orderBy: tri.orderBy,
       skip: (query.page - 1) * TAILLE,
       take: TAILLE,
       include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, vehicule: { select: { immatriculation: true, marque: true, modele: true } } },
@@ -78,45 +89,19 @@ export default async function DevisPage({ searchParams }: { searchParams: Promis
         </Button>
       </form>
       <Card className="p-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>N°</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Véhicule</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead className="text-right">Total TTC</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Aucun devis. Créez votre premier devis.
-                </TableCell>
-              </TableRow>
-            )}
-            {items.map((d) => (
-              <TableRow key={d.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/devis/${d.id}`} className="hover:underline">
-                    {d.numero}
-                  </Link>
-                </TableCell>
-                <TableCell>{nomClient(d.client)}</TableCell>
-                <TableCell>{d.vehicule ? `${d.vehicule.marque} ${d.vehicule.modele} · ${d.vehicule.immatriculation}` : "Vente de pièces"}</TableCell>
-                <TableCell>{dateFR(d.dateCreation)}</TableCell>
-                <TableCell>
-                  <StatusBadge tone={TONE_DEVIS[d.statut]}>{LABELS.statutDevis[d.statut]}</StatusBadge>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{eur(d.totalTTC.toString())}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <DevisTable
+          serveur={{ page: query.page, pages: Math.max(1, Math.ceil(total / TAILLE)), total, tri: tri.tri, ordre: tri.ordre }}
+          rows={items.map((d) => ({
+            id: d.id,
+            numero: d.numero,
+            client: nomClient(d.client),
+            vehicule: d.vehicule ? `${d.vehicule.marque} ${d.vehicule.modele} · ${d.vehicule.immatriculation}` : null,
+            date: d.dateCreation.toISOString(),
+            statut: d.statut,
+            totalTTC: Number(d.totalTTC),
+          }))}
+        />
       </Card>
-      <Pagination page={query.page} pages={Math.max(1, Math.ceil(total / TAILLE))} basePath="/devis" params={{ q: sp.q, statut: sp.statut }} />
     </>
   );
 }

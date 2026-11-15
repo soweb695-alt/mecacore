@@ -63,7 +63,7 @@ async function idsParReferenceCroisee(q: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-export async function rechercherPieces(user: PermissionUser, opts: { q?: string; categorie?: string; bas?: boolean; page: number }) {
+export async function rechercherPieces(user: PermissionUser, opts: { q?: string; categorie?: string; bas?: boolean; page: number; orderBy?: Prisma.PieceOrderByWithRelationInput[] }) {
   const q = opts.q?.trim();
   const croisees = q ? await idsParReferenceCroisee(q) : [];
   const base: Prisma.PieceWhereInput = {
@@ -101,12 +101,13 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
   let rows: PieceRow[];
   if (q) {
     // Recherche : les pièces réellement en stock remontent d'abord (tri fait ici, le volume d'une recherche reste faible).
-    const tout = await db.piece.findMany({ where, orderBy: { nom: "asc" }, take: 300 });
-    tout.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
+    const tout = await db.piece.findMany({ where, orderBy: opts.orderBy ?? { nom: "asc" }, take: 300 });
+    // Sans tri choisi, les pièces en stock d'abord.
+    if (!opts.orderBy) tout.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
     total = tout.length;
     rows = tout.slice((opts.page - 1) * PAGE_SIZE_PIECES, opts.page * PAGE_SIZE_PIECES);
   } else {
-    [total, rows] = await Promise.all([db.piece.count({ where }), db.piece.findMany({ where, orderBy: { nom: "asc" }, skip: (opts.page - 1) * PAGE_SIZE_PIECES, take: PAGE_SIZE_PIECES })]);
+    [total, rows] = await Promise.all([db.piece.count({ where }), db.piece.findMany({ where, orderBy: opts.orderBy ?? { nom: "asc" }, skip: (opts.page - 1) * PAGE_SIZE_PIECES, take: PAGE_SIZE_PIECES })]);
   }
   return {
     total,

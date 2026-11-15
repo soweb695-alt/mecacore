@@ -25,7 +25,7 @@ export function clientData(b: ClientInput): Prisma.ClientCreateInput {
   };
 }
 
-export async function rechercherClients(opts: { q?: string; type?: "PARTICULIER" | "PRO"; page: number }) {
+export async function rechercherClients(opts: { q?: string; type?: "PARTICULIER" | "PRO"; page: number; orderBy?: Prisma.ClientOrderByWithRelationInput[] }) {
   const q = opts.q?.trim();
   const plaques = q ? await idsVehiculesParPlaque(q) : [];
   const where: Prisma.ClientWhereInput = {
@@ -50,7 +50,7 @@ export async function rechercherClients(opts: { q?: string; type?: "PARTICULIER"
     db.client.count({ where }),
     db.client.findMany({
       where,
-      orderBy: [{ lastName: "asc" }, { companyName: "asc" }],
+      orderBy: opts.orderBy ?? [{ lastName: "asc" }, { companyName: "asc" }],
       skip: (opts.page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: { _count: { select: { vehicules: true } } },

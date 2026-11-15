@@ -1,23 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { AlertTriangle, Download, Plus, Upload } from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Pagination } from "@/components/pagination";
-import { StatusBadge } from "@/components/status-badge";
 import { LienTelechargement } from "@/components/telechargement";
 import { ImportPieces } from "@/components/stock/import-pieces";
 import { PieceForm } from "@/components/stock/piece-form";
-import { VignettePiece } from "@/components/stock/piece-image";
+import { StockTable } from "@/components/stock/stock-table";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { eur } from "@/lib/format";
 import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
 import { rechercherPieces } from "@/lib/services/pieces";
 import { requirePage } from "@/lib/session";
+import { lireTri } from "@/lib/tri";
 import { pieceListQuery } from "@/lib/validators/piece";
 
 export const metadata: Metadata = { title: "Stocks" };
@@ -27,14 +24,26 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const parsed = pieceListQuery.safeParse({ q: sp.q || undefined, categorie: sp.categorie || undefined, bas: sp.bas || undefined, page: sp.page ?? 1 });
   const query = parsed.success ? parsed.data : { page: 1 };
+  const tri = lireTri<Prisma.PieceOrderByWithRelationInput[] | undefined>(
+    sp,
+    {
+      reference: (o) => [{ reference: o }],
+      nom: (o) => [{ nom: o }],
+      fournisseur: (o) => [{ fournisseur: o }, { nom: "asc" }],
+      // Le prix d'achat n'est triable que par ceux qui le voient.
+      ...(canSeePurchasePrice(user) ? { prixAchatHT: (o: "asc" | "desc") => [{ prixAchatHT: o }] } : {}),
+      prixVenteHT: (o) => [{ prixVenteHT: o }],
+      stock: (o) => [{ stock: o }, { nom: "asc" }],
+    },
+    undefined,
+  );
   const [res, cats] = await Promise.all([
-    rechercherPieces(user, { q: query.q, categorie: query.categorie, bas: query.bas === "1", page: query.page }),
+    rechercherPieces(user, { q: query.q, categorie: query.categorie, bas: query.bas === "1", page: query.page, orderBy: tri.orderBy }),
     db.piece.findMany({ where: { isActive: true, categorie: { not: null } }, distinct: ["categorie"], select: { categorie: true }, orderBy: { categorie: "asc" } }),
   ]);
   const marges = canSeeMargins(user);
   const achat = canSeePurchasePrice(user);
   const filtresExport = [sp.q && `&q=${encodeURIComponent(sp.q)}`, sp.categorie && `&categorie=${encodeURIComponent(sp.categorie)}`, sp.bas && "&bas=1"].filter(Boolean).join("");
-  const nbCol = 5 + (achat ? 1 : 0) + (marges ? 1 : 0);
 
   return (
     <>
@@ -108,59 +117,27 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         </Button>
       </form>
       <Card className="p-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Référence</TableHead>
-              <TableHead>Désignation</TableHead>
-              <TableHead>Fournisseur</TableHead>
-              {achat && <TableHead className="text-right">Prix achat HT</TableHead>}
-              <TableHead className="text-right">Prix vente HT</TableHead>
-              {marges && <TableHead className="text-right">Marge</TableHead>}
-              <TableHead>Stock</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {res.items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={nbCol} className="py-10 text-center text-muted-foreground">
-                  Aucune pièce ne correspond à votre recherche.
-                </TableCell>
-              </TableRow>
-            )}
-            {res.items.map((p) => (
-              <TableRow key={p.id} className={p.enAlerte ? "bg-warning-bg/40" : undefined}>
-                <TableCell className="font-medium">
-                  <Link href={`/stock/${p.id}`} className="flex items-center gap-2 hover:underline">
-                    <VignettePiece id={p.id} version={p.imageMaj} nom={p.nom} />
-                    {p.reference}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  {p.nom}
-                  {p.referenceCroisee && <div className="text-xs font-medium text-link">Équivalent de {p.referenceCroisee}</div>}
-                  {p.referencesCroisees.length > 0 && <div className="text-xs text-muted-foreground">Croisées : {p.referencesCroisees.join(", ")}</div>}
-                </TableCell>
-                <TableCell>{p.fournisseur ?? "–"}</TableCell>
-                {achat && <TableCell className="text-right tabular-nums">{p.prixAchatHT !== undefined ? eur(p.prixAchatHT) : "–"}</TableCell>}
-                <TableCell className="text-right tabular-nums">{eur(p.prixVenteHT)}</TableCell>
-                {marges && <TableCell className="text-right tabular-nums">{p.margePct !== undefined ? `${p.margePct} %` : "–"}</TableCell>}
-                <TableCell>
-                  {p.enAlerte ? (
-                    <StatusBadge tone="warn">
-                      <AlertTriangle className="size-3" aria-hidden />
-                      {p.stock} / seuil {p.seuilAlerte}
-                    </StatusBadge>
-                  ) : (
-                    <StatusBadge tone="ok">{p.stock}</StatusBadge>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <StockTable
+          achat={achat}
+          marges={marges}
+          serveur={{ page: query.page, pages: res.pages, total: res.total, tri: tri.tri, ordre: tri.ordre }}
+          rows={res.items.map((p) => ({
+            id: p.id,
+            reference: p.reference,
+            nom: p.nom,
+            imageMaj: p.imageMaj ? p.imageMaj.toISOString() : null,
+            referenceCroisee: p.referenceCroisee ?? null,
+            referencesCroisees: p.referencesCroisees,
+            fournisseur: p.fournisseur,
+            ...(achat && p.prixAchatHT !== undefined ? { prixAchatHT: p.prixAchatHT } : {}),
+            prixVenteHT: p.prixVenteHT,
+            ...(marges && p.margePct !== undefined ? { margePct: p.margePct } : {}),
+            stock: p.stock,
+            seuilAlerte: p.seuilAlerte,
+            enAlerte: p.enAlerte,
+          }))}
+        />
       </Card>
-      <Pagination page={query.page} pages={res.pages} basePath="/stock" params={{ q: sp.q, categorie: sp.categorie, bas: sp.bas }} />
     </>
   );
 }
