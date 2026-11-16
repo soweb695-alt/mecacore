@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { DevisActions, LienDocument } from "@/components/devis/devis-actions";
 import { DevisEditor } from "@/components/devis/devis-editor";
 import { CreerFactureButton } from "@/components/factures/creer-facture-button";
+import { EnvoiEmailButton } from "@/components/envoi-email-button";
 import { PageHeader } from "@/components/page-header";
 import { LABELS, StatusBadge, TONE_DEVIS } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { db } from "@/lib/db";
 import { dateFR, eur, nomClient } from "@/lib/format";
 import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
+import { montantsLigne, prixTTCDepuisHT } from "@/lib/money";
 import { lireDevis, penuriesDevis } from "@/lib/services/devis";
 import { montantRemise, tauxRemiseLigne } from "@/lib/remise";
 import { tarifsActifs } from "@/lib/services/tarifs";
@@ -32,11 +34,14 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
     modifiable ? tarifsActifs() : [],
     enAttente ? penuriesDevis(d.id) : [],
   ]);
-  const ttc = (ht: number, taux: number) => Math.round(ht * (100 + taux)) / 100;
+  const ttc = prixTTCDepuisHT;
 
   const actions = (
     <>
       {d.ordre && <LienDocument href={`/ordres-reparation/${d.ordre.id}`} libelle={d.ordre.numero} />}
+      {d.ordre && (d.ordre.statut === "A_TRAITER_MAGASIN" || d.ordre.statut === "FACTURE") && can(user, "create", "message") && (
+        <EnvoiEmailButton label="Véhicule prêt" sujet="Véhicule prêt" url={`/api/ordres-reparation/${d.ordre.id}/vehicule-pret`} client={nomClient(d.client)} email={d.client.email} />
+      )}
       {d.bonLivraison && can(user, "read", "bonLivraison") && <LienDocument href="/bons-livraison" libelle={`${d.bonLivraison.numero} (${LABELS.statutBL[d.bonLivraison.statut].toLowerCase()})`} />}
       {d.facture && can(user, "read", "facture") && (
         <Link href={`/factures/${d.facture.id}`} className="inline-flex h-9 items-center rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
@@ -54,7 +59,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
         penuries={penuries}
         priseEnCompteSeuil={d.priseEnCompteSeuil}
       />
-      {d.statut === "VALIDE" && !d.facture && !d.bonLivraison?.factureId && can(user, "create", "facture") && <CreerFactureButton devisId={d.id} totaux={{ totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) }} />}
+      {d.statut === "VALIDE" && !d.facture && !d.bonLivraison?.factureId && can(user, "create", "facture") && <CreerFactureButton devisId={d.id} totaux={d.totauxAvantRemise} remise={d.remise} />}
     </>
   );
 
@@ -92,11 +97,13 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
             prochainCT: d.vehicule?.prochainCT ? d.vehicule.prochainCT.toISOString().slice(0, 10) : "",
             dateValidite: d.dateValidite.toISOString().slice(0, 10),
             priseEnCompteSeuil: d.priseEnCompteSeuil,
+            remise: d.remise,
             lignes: d.lignes.map((l) => ({
               type: l.type,
               designation: l.designation,
               quantite: String(l.quantite),
               prixUnitaireHT: String(l.prixUnitaireHT),
+              prixUnitaireTTC: l.prixUnitaireTTC,
               tvaRate: String(l.tvaRate),
               pieceId: l.pieceId,
               tarifId: l.tarifId,
@@ -141,11 +148,11 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.quantite}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {eur(ttc(l.prixUnitaireHT, l.tvaRate))}
+                      {eur(l.prixUnitaireTTC)}
                       <div className="text-xs text-muted-foreground">{eur(l.prixUnitaireHT)} HT</div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.tvaRate} %</TableCell>
-                    <TableCell className="text-right tabular-nums">{eur(ttc(l.totalHT, l.tvaRate))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{eur(montantsLigne(l).totalTTC)}</TableCell>
                     {marges && <TableCell className="text-right tabular-nums text-muted-foreground">{l.margeHT !== undefined ? eur(l.margeHT) : "–"}</TableCell>}
                   </TableRow>
                 ))}
@@ -156,6 +163,12 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                 <p className="text-xs text-success">
                   Remise professionnelle de {d.remisePro} % déduite sur les pièces ({eur(montantRemise(d.lignes))} HT).
                 </p>
+              )}
+              {d.remise && (
+                <>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Total TTC avant remise</span><span className="tabular-nums">{eur(d.totauxAvantRemise.totalTTC)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Remise {d.remise.type === "POURCENT" ? `${d.remise.valeur.toLocaleString("fr-FR")} %` : ""} (sur {d.remise.base})</span><span className="tabular-nums">− {eur(d.remiseMontant)}</span></div>
+                </>
               )}
               <div className="flex justify-between"><span className="text-muted-foreground">Total HT</span><span className="tabular-nums">{eur(d.totalHT)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">TVA</span><span className="tabular-nums">{eur(d.totalTVA)}</span></div>

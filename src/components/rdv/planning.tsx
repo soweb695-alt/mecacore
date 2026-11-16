@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { dateFnsLocalizer, type CalendarProps, type EventProps, type Formats, type Messages } from "react-big-calendar";
 import { toast } from "sonner";
+import { EnvoiEmailButton } from "@/components/envoi-email-button";
 import { RdvForm, type RdvInitial } from "@/components/rdv/rdv-form";
 import ShadcnBigCalendar from "@/components/shadcn-big-calendar/shadcn-big-calendar";
 import { LABELS, StatusBadge, TONE_RDV } from "@/components/status-badge";
@@ -27,6 +28,8 @@ export interface PlanningEvent {
   collaborateur: string;
   clientId: string;
   clientNom: string;
+  /** Adresse e-mail du client (null pour le mécanicien ou sans adresse). */
+  clientEmail?: string | null;
   vehiculeId: string;
   vehicule: string;
   motif: string | null;
@@ -50,6 +53,8 @@ interface Props {
   couleurs: Record<string, string>;
   collaborateurs: { id: string; nom: string; couleur: string }[];
   peutModifier: boolean;
+  /** Envoi d'e-mails au client (« Rappel RDV »). */
+  peutEnvoyer?: boolean;
 }
 
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek: (d: Date) => startOfWeek(d, { weekStartsOn: 1 }), getDay, locales: { fr } });
@@ -85,7 +90,7 @@ function Evenement({ event }: EventProps<CalEvent>) {
   );
 }
 
-export function Planning({ vue, jour, events, couleurs, collaborateurs, peutModifier }: Props) {
+export function Planning({ vue, jour, events, couleurs, collaborateurs, peutModifier, peutEnvoyer = false }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<RdvInitial | null>(null);
   const [detail, setDetail] = useState<PlanningEvent | null>(null);
@@ -210,6 +215,9 @@ export function Planning({ vue, jour, events, couleurs, collaborateurs, peutModi
                   <Button size="sm" variant="outline" onClick={() => { const d = detail; setDetail(null); setForm({ id: d.id, clientId: d.clientId, clientNom: d.clientNom, vehiculeId: d.vehiculeId, userId: d.userId, jour: d.debut.slice(0, 10), debut: d.debut.slice(11, 16), fin: d.fin.slice(11, 16), motif: d.motif ?? "", devisId: d.devisId, devisNumero: d.devisNumero }); }}>
                     Déplacer
                   </Button>
+                  {peutEnvoyer && (detail.statut === "PLANIFIE" || detail.statut === "CONFIRME") && (
+                    <EnvoiEmailButton label="Rappel RDV" sujet="Rappel de rendez-vous" url={`/api/rendez-vous/${detail.id}/rappel`} client={detail.clientNom} email={detail.clientEmail ?? null} size="sm" />
+                  )}
                   <Button size="sm" variant="destructive" onClick={() => statut(detail.id, "ANNULE")}>
                     Annuler le rendez-vous
                   </Button>

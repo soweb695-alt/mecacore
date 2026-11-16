@@ -16,6 +16,10 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "src/generated/**",
+    // Page web enregistrée (scripts minifiés tiers), pas du code de l'application.
+    "mecacore_files/**",
+    // Base PostgreSQL locale embarquée (npm run db:dev).
+    ".pgdata/**",
   ]),
 ]);
 

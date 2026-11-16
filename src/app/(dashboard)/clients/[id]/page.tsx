@@ -6,11 +6,11 @@ import { ClientForm } from "@/components/clients/client-form";
 import { VehiculeForm } from "@/components/clients/vehicule-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FormDialog } from "@/components/forms/form-dialog";
+import { VehiculesClientTable } from "@/components/clients/fiches-columns";
 import { PageHeader } from "@/components/page-header";
 import { LABELS, StatusBadge, TONE_DEVIS, TONE_FACTURE } from "@/components/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { dateFR, eur, nomClient } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -26,6 +26,8 @@ const MODELES: Record<string, string> = {
   recap_impayes: "Récapitulatif des impayés",
   rdv_rappel_j1: "Rappel de rendez-vous (J-1)",
   rdv_rappel_j7: "Rappel de rendez-vous (J-7)",
+  rdv_rappel_manuel: "Rappel de rendez-vous",
+  vehicule_pret: "Véhicule prêt",
 };
 const STATUTS_MESSAGE: Record<string, string> = { EN_COURS: "en cours", ECHEC: "échec", IGNORE: "non envoyé : service non configuré", ENVOYE: "envoyé" };
 
@@ -124,46 +126,16 @@ export default async function FicheClient({ params }: { params: Promise<{ id: st
               )}
             </CardHeader>
             <CardContent>
-              {client.vehicules.length === 0 ? (
-                <p className="py-4 text-sm text-muted-foreground">Aucun véhicule enregistré pour ce client.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Plaque</TableHead>
-                      <TableHead>Véhicule</TableHead>
-                      <TableHead>Motorisation</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {client.vehicules.map((v) => (
-                      <TableRow key={v.id}>
-                        <TableCell className="font-medium"><Link href={`/vehicules/${v.id}`} className="hover:underline">{v.immatriculation}</Link></TableCell>
-                        <TableCell>
-                          {v.marque} {v.modele}
-                          {v.annee ? ` (${v.annee})` : ""}
-                        </TableCell>
-                        <TableCell>{v.motorisation ?? "–"}</TableCell>
-                        <TableCell>
-                          {can(user, "update", "vehicule") && (
-                            <FormDialog
-                              title="Modifier le véhicule"
-                              trigger={
-                                <Button variant="ghost" size="icon-sm" aria-label={`Modifier ${v.immatriculation}`}>
-                                  <Pencil aria-hidden />
-                                </Button>
-                              }
-                            >
-                              {<VehiculeForm clientId={client.id} clientNom={nom} vehicule={{ ...v, vin: v.vin ?? "", motorisation: v.motorisation ?? "", prochainCT: v.prochainCT ? v.prochainCT.toISOString().slice(0, 10) : "" }} />}
-                            </FormDialog>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              <VehiculesClientTable
+                modifier={can(user, "update", "vehicule") ? { clientId: client.id, clientNom: nom } : null}
+                rows={client.vehicules.map((v) => ({
+                  id: v.id,
+                  immatriculation: v.immatriculation,
+                  vehicule: `${v.marque} ${v.modele}${v.annee ? ` (${v.annee})` : ""}`,
+                  motorisation: v.motorisation,
+                  formulaire: { ...v, vin: v.vin ?? "", motorisation: v.motorisation ?? "", prochainCT: v.prochainCT ? v.prochainCT.toISOString().slice(0, 10) : "" },
+                }))}
+              />
             </CardContent>
           </Card>
 
@@ -257,6 +229,7 @@ export default async function FicheClient({ params }: { params: Promise<{ id: st
                     <span>
                       {m.canal === "SMS" ? "SMS" : "E-mail"} · {MODELES[m.template] ?? m.template}
                       {m.statut !== "ENVOYE" && <span className="ml-1.5 text-xs text-warning">({STATUTS_MESSAGE[m.statut]})</span>}
+                      {m.statut === "ECHEC" && m.erreur && <span className="block text-xs text-muted-foreground">{m.erreur}</span>}
                     </span>
                     <span className="text-xs text-muted-foreground">{dateFR(m.envoyeLe)}</span>
                   </div>

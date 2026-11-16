@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { AssignMecanicien } from "@/components/or/assign-mecanicien";
 import { FicheControle } from "@/components/or/fiche-controle";
 import { OrdreTablette } from "@/components/or/ordre-tablette";
+import { EnvoiEmailButton } from "@/components/envoi-email-button";
 import { PageHeader } from "@/components/page-header";
 import { LABELS, StatusBadge, TONE_ORDRE } from "@/components/status-badge";
 import { db } from "@/lib/db";
@@ -29,7 +30,7 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
           numero: true,
           kilometrage: true,
           facture: { select: { id: true, statut: true, numero: true } },
-          client: { select: { type: true, firstName: true, lastName: true, companyName: true } },
+          client: { select: { type: true, firstName: true, lastName: true, companyName: true, email: true } },
           vehicule: { select: { marque: true, modele: true, immatriculation: true, motorisation: true, kilometrage: true } },
         },
       },
@@ -61,6 +62,9 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
         actions={
           !mecano && (
             <>
+              {(o.statut === "A_TRAITER_MAGASIN" || o.statut === "FACTURE") && can(user, "create", "message") && (
+                <EnvoiEmailButton label="Véhicule prêt" sujet="Véhicule prêt" url={`/api/ordres-reparation/${o.id}/vehicule-pret`} client={nomClient(o.devis.client)} email={o.devis.client.email} />
+              )}
               <AssignMecanicien ordreId={o.id} valeur={o.userId} mecaniciens={mecaniciens.map((m) => ({ id: m.id, nom: `${m.firstName} ${m.lastName}` }))} />
               {o.devis.facture && can(user, "update", "facture") && (
                 <Link href={`/factures/${o.devis.facture.id}`} className="inline-flex h-9 items-center rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
@@ -74,7 +78,7 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
               )}
               {retours !== null && (
                 <Link href={`/retours?ordreId=${o.id}`} className="inline-flex h-9 items-center rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
-                  Retours & consignées ({retours})
+                  Retours et consignes ({retours})
                 </Link>
               )}
             </>

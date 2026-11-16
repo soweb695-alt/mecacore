@@ -17,22 +17,28 @@ export function FacturerDialog({
   onClose,
   description,
   totaux,
+  initial = optionsInitiales,
+  heriterSiVide = false,
   onConfirm,
 }: {
   ouvert: boolean;
   onClose: () => void;
   description: string;
   totaux?: Totaux;
+  /** Remise pré-remplie (celle du devis). */
+  initial?: OptionsFactureState;
+  /** Remise laissée vide = reprendre les remises des devis (facture groupée de bons de livraison). */
+  heriterSiVide?: boolean;
   onConfirm: (options: ReturnType<typeof payloadOptions>) => Promise<void>;
 }) {
-  const [options, setOptions] = useState<OptionsFactureState>(optionsInitiales);
+  const [options, setOptions] = useState<OptionsFactureState>(initial);
   const [pending, setPending] = useState(false);
   const invalide = totaux ? apercu(totaux, options).erreur !== null : Number(options.valeur) < 0 || (options.type === "POURCENT" && Number(options.valeur) >= 100);
 
   async function confirmer() {
     setPending(true);
     try {
-      await onConfirm(payloadOptions(options));
+      await onConfirm(payloadOptions(options, heriterSiVide));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
       setPending(false);

@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PreparerFactureButton } from "@/components/or/preparer-facture-button";
+import { OrdresTable } from "@/components/or/columns";
 import { PageHeader } from "@/components/page-header";
 import { LABELS, StatusBadge, TONE_ORDRE } from "@/components/status-badge";
-import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { dateFR, nomClient } from "@/lib/format";
+import { nomClient } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { requirePage } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -95,67 +93,29 @@ export default async function OrdresPage({ searchParams }: { searchParams: Promi
       <PageHeader title="Ordres de réparation" description="Créés automatiquement à la validation d'un devis mécanique." />
       {onglets}
       <Card className="p-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>N°</TableHead>
-              <TableHead>Véhicule</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Technicien</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Fiche de contrôle</TableHead>
-              <TableHead>{magasin ? "Terminé le" : "Créé le"}</TableHead>
-              <TableHead className="text-right">Kilométrage</TableHead>
-              {magasin && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {ordres.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={magasin ? 9 : 8} className="py-10 text-center text-muted-foreground">
-                  {magasin ? "Aucun ordre de réparation à traiter." : "Aucun ordre de réparation."}
-                </TableCell>
-              </TableRow>
-            )}
-            {ordres.map((o) => (
-              <TableRow key={o.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/ordres-reparation/${o.id}`} className="hover:underline">
-                    {o.numero}
-                  </Link>
-                </TableCell>
-                <TableCell>{o.devis.vehicule ? `${o.devis.vehicule.marque} ${o.devis.vehicule.modele} · ${o.devis.vehicule.immatriculation}` : "–"}</TableCell>
-                <TableCell>{nomClient(o.devis.client)}</TableCell>
-                <TableCell>{o.user?.firstName ?? "Non assigné"}</TableCell>
-                <TableCell>
-                  <StatusBadge tone={TONE_ORDRE[o.statut]}>{LABELS.statutOrdre[o.statut]}</StatusBadge>
-                </TableCell>
-                <TableCell>
-                  {o.fiche?.statut === "TRANSMISE" ? <StatusBadge tone="warn">Transmise</StatusBadge> : o.fiche?.statut === "TRAITEE" ? <StatusBadge tone="ok">Traitée</StatusBadge> : <span className="text-muted-foreground">{o.fiche ? "En cours" : "–"}</span>}
-                </TableCell>
-                <TableCell>{dateFR(magasin ? o.updatedAt : o.createdAt)}</TableCell>
-                <TableCell className="text-right tabular-nums">{o.kilometrage != null ? `${o.kilometrage.toLocaleString("fr-FR")} km` : "–"}</TableCell>
-                {magasin && (
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      {!o.devis.facture && can(user, "create", "facture") && <PreparerFactureButton ordreId={o.id} />}
-                      {o.devis.facture && can(user, "update", "facture") && (
-                        <Link href={`/factures/${o.devis.facture.id}`} className={cn(buttonVariants({ size: "sm" }))}>
-                          {o.devis.facture.statut === "BROUILLON" ? "Finaliser la facture" : `Facture ${o.devis.facture.numero}`}
-                        </Link>
-                      )}
-                      {can(user, "create", "devis") && (
-                        <Link href={`/devis/nouveau?clientId=${o.devis.clientId}${o.devis.vehiculeId ? `&vehiculeId=${o.devis.vehiculeId}` : ""}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-                          Devis complémentaire
-                        </Link>
-                      )}
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <OrdresTable
+          magasin={magasin}
+          rows={ordres.map((o) => ({
+            id: o.id,
+            numero: o.numero,
+            vehicule: o.devis.vehicule ? `${o.devis.vehicule.marque} ${o.devis.vehicule.modele} · ${o.devis.vehicule.immatriculation}` : null,
+            client: nomClient(o.devis.client),
+            technicien: o.user?.firstName ?? null,
+            statut: o.statut,
+            fiche: o.fiche ? (o.fiche.statut === "TRANSMISE" || o.fiche.statut === "TRAITEE" ? o.fiche.statut : "EN_COURS") : null,
+            date: (magasin ? o.updatedAt : o.createdAt).toISOString(),
+            kilometrage: o.kilometrage,
+            ...(magasin
+              ? {
+                  actions: {
+                    preparer: !o.devis.facture && can(user, "create", "facture"),
+                    facture: o.devis.facture && can(user, "update", "facture") ? { id: o.devis.facture.id, libelle: o.devis.facture.statut === "BROUILLON" ? "Finaliser la facture" : `Facture ${o.devis.facture.numero}` } : null,
+                    devisComplementaire: can(user, "create", "devis") ? `/devis/nouveau?clientId=${o.devis.clientId}${o.devis.vehiculeId ? `&vehiculeId=${o.devis.vehiculeId}` : ""}` : null,
+                  },
+                }
+              : {}),
+          }))}
+        />
       </Card>
     </>
   );

@@ -24,6 +24,15 @@ export async function pdfDevis(id: string): Promise<{ numero: string; pdf: Uint8
     remiseMontant: montantRemise(d.lignes.map((l) => ({ quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null }))),
     totaux: { totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) },
     remisePro: Number(d.remisePro),
+    remiseGlobale:
+      d.totalHTAvantRemise !== null && Number(d.remiseGlobaleMontant) > 0
+        ? {
+            libelle: `Remise ${d.remiseGlobaleType === "POURCENT" ? `${String(Number(d.remiseGlobaleValeur)).replace(".", ",")} %` : "commerciale"} (sur ${d.remiseGlobaleBase})`,
+            montant: Number(d.remiseGlobaleMontant),
+            totalHTAvantRemise: Number(d.totalHTAvantRemise),
+            ...(d.remiseGlobaleBase === "TTC" ? { totalTTCAvantRemise: Math.round((Number(d.totalTTC) + Number(d.remiseGlobaleMontant)) * 100) / 100 } : {}),
+          }
+        : undefined,
     prixTTC: true,
     notes: ["Devis gratuit, valable jusqu'à la date indiquée. Bon pour accord : date et signature du client précédées de la mention « Bon pour accord »."],
   });

@@ -87,6 +87,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                 designation: l.designation,
                 quantite: String(Number(l.quantite)),
                 prixUnitaireHT: String(Number(l.prixUnitaireHT)),
+                prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null,
                 tvaRate: String(Number(l.tvaRate)),
                 pieceId: l.pieceId,
                 stock: l.pieceId ? (stock.get(l.pieceId) ?? null) : null,
@@ -198,7 +199,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                     <TableCell className="text-right tabular-nums">{eur(l.prixUnitaireHT.toString())}</TableCell>
                     <TableCell className="text-right tabular-nums">{Number(l.tvaRate)} %</TableCell>
                     <TableCell className="text-right tabular-nums">{eur(l.totalHT.toString())}</TableCell>
-                    {marges && <TableCell className="text-right tabular-nums text-muted-foreground">{l.prixAchatHT ? eur(round2((Number(l.prixUnitaireHT) - Number(l.prixAchatHT)) * Number(l.quantite))) : "–"}</TableCell>}
+                    {marges && <TableCell className="text-right tabular-nums text-muted-foreground">{l.prixAchatHT ? eur(round2(Number(l.totalHT) - Number(l.prixAchatHT) * Number(l.quantite))) : "–"}</TableCell>}
                   </TableRow>
                 ))}
               </TableBody>

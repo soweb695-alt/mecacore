@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { IBM_Plex_Sans } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_COULEUR, APP_NAME, APP_TAGLINE } from "@/lib/app";
-import { getCurrentUser } from "@/lib/session";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// IBM Plex Sans : lisible sur tablette d'atelier, chiffres tabulaires nets pour les montants.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,11 +26,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Thème par rôle : la session NextAuth détermine la couleur principale (variables CSS de globals.css).
-  const user = await getCurrentUser();
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" data-role={user?.role} className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="fr" className={`${plexSans.variable} h-full antialiased`}>
       <body className="min-h-full">
         {children}
         <Toaster richColors position="bottom-right" />

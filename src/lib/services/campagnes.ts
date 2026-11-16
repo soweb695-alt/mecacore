@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { configBrevo, manquesBrevo } from "@/lib/integrations/brevo";
 import { ApiError } from "@/lib/errors";
 import { rendreCampagneHtml } from "@/lib/campagne-contenu";
 import { lienDesinscription } from "@/lib/desinscription";
@@ -58,7 +59,7 @@ export async function envoyerCampagne(id: string) {
   const c = await db.campagne.findUnique({ where: { id } });
   if (!c || c.type !== "MANUELLE" || !c.sujet || !c.contenu) throw new ApiError(404, "Campagne introuvable", "INTROUVABLE");
   if (c.envoyeeLe && c.nbEchecs === 0) throw new ApiError(409, "Cette campagne a déjà été envoyée", "DEJA_ENVOYEE");
-  if (!process.env.BREVO_API_KEY) throw new ApiError(503, "L'envoi d'e-mails n'est pas configuré (clé Brevo manquante).", "EMAIL_NON_CONFIGURE");
+  if (!configBrevo()) throw new ApiError(503, `L'envoi d'e-mails n'est pas configuré (manque ${manquesBrevo().join(" et ")}).`, "EMAIL_NON_CONFIGURE");
 
   const destinataires = await db.client.findMany({
     where: critereDestinataires(c.audience as Audience),

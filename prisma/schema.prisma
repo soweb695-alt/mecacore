@@ -237,6 +237,10 @@ model Piece {
   prixVenteHT        Decimal  @default(0) @db.Decimal(10, 2)
   stock              Int      @default(0)
   seuilAlerte        Int      @default(0)
+  /// Faux : la pièce ne déclenche aucune alerte de seuil (liste, tableau de bord, devis) ni bon de commande automatique.
+  alerteActive       Boolean  @default(true)
+  /// Date du dernier envoi d'image (null : pas d'image). Sert aussi de version pour le cache navigateur.
+  imageMaj           DateTime?
   taillePneu         String?
   referencesCroisees String[]
   isActive           Boolean  @default(true)
@@ -248,9 +252,20 @@ model Piece {
   lignesCommande  LigneBonCommande[]
   lignesLivraison LigneBonLivraison[]
   retours         RetourPiece[]
+  image           PieceImage?
 
   @@index([nom])
   @@index([categorie])
+}
+
+/// Image d'une pièce, stockée en base (fonctionne sans S3, disque en lecture seule sur Vercel) et à part de Piece
+/// pour que les listes ne chargent jamais les octets.
+model PieceImage {
+  pieceId String @id
+  data    Bytes
+  mime    String
+
+  piece Piece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
 }
 
 model Devis {
@@ -264,6 +279,13 @@ model Devis {
   dateCreation       DateTime    @default(now())
   dateValidite       DateTime
   remisePro          Decimal     @default(0) @db.Decimal(5, 2)
+  /// Remise globale (comme sur la facture) : saisie € ou %, base HT ou TTC, montant déduit sur cette base.
+  remiseGlobaleType    TypeRemise?
+  remiseGlobaleBase    BaseRemise?
+  remiseGlobaleValeur  Decimal     @default(0) @db.Decimal(10, 2)
+  remiseGlobaleMontant Decimal     @default(0) @db.Decimal(10, 2)
+  /// Total HT avant remise globale (null = pas de remise globale).
+  totalHTAvantRemise   Decimal?    @db.Decimal(10, 2)
   kilometrage        Int?
   totalHT            Decimal     @default(0) @db.Decimal(10, 2)
   totalTVA           Decimal     @default(0) @db.Decimal(10, 2)
@@ -295,6 +317,8 @@ model LigneDevis {
   designation     String
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.
+  prixUnitaireTTC Decimal?  @db.Decimal(10, 2)
   prixCatalogueHT Decimal?  @db.Decimal(10, 2)
   tvaRate         Decimal   @default(20) @db.Decimal(5, 2)
   totalHT         Decimal   @db.Decimal(10, 2)
@@ -492,6 +516,8 @@ model LigneFacture {
   designation     String
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
+  /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.
+  prixUnitaireTTC Decimal?  @db.Decimal(10, 2)
   prixCatalogueHT Decimal?  @db.Decimal(10, 2)
   tvaRate         Decimal   @db.Decimal(5, 2)
   totalHT         Decimal   @db.Decimal(10, 2)
@@ -638,6 +664,15 @@ model ParametreGarage {
   prefixBonLivraison   String    @default("BL")
   retentionClientsAns  Int       @default(5)
   retentionMessagesAns Int       @default(3)
+  /// Mentions légales imprimées en pied de page des PDF (ex. « SARL au capital de 10 000 € · RCS Lyon 123 456 789 »).
+  formeJuridique       String?
+  capitalSocial        String?
+  rcs                  String?
+  /// Modèles d'e-mails modifiables dans « Mon Garage » (vide : texte par défaut).
+  emailVehiculePretSujet String?
+  emailVehiculePretCorps String?
+  emailRappelRdvSujet    String?
+  emailRappelRdvCorps    String?
   iban                 String?
   bic                  String?
   /// Ancienne clé de stockage du logo (S3 / disque). Remplacée par `logoData`, gardée pour les logos déjà envoyés.

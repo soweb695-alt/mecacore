@@ -26,7 +26,7 @@ export function pieceVue(p: PieceRow, user: PermissionUser) {
     prixVenteHT: vente,
     ...(achatVisible ? { prixAchatHT: achat } : {}),
     ...(marges ? { margePct: vente > 0 ? Math.round(((vente - achat) / vente) * 100) : 0 } : {}),
-    enAlerte: p.stock <= p.seuilAlerte,
+    enAlerte: p.alerteActive && p.stock <= p.seuilAlerte,
   };
 }
 
@@ -42,6 +42,7 @@ export function pieceData(b: PieceInput, user: PermissionUser, creation: boolean
     prixVenteHT: b.prixVenteHT,
     stock: b.stock,
     seuilAlerte: b.seuilAlerte,
+    ...(b.alerteActive !== undefined ? { alerteActive: b.alerteActive } : {}),
     taillePneu: nn(b.taillePneu),
     referencesCroisees: Array.from(new Set(b.referencesCroisees.map((r) => r.toUpperCase()))),
   };
@@ -62,7 +63,7 @@ async function idsParReferenceCroisee(q: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-export async function rechercherPieces(user: PermissionUser, opts: { q?: string; categorie?: string; bas?: boolean; page: number }) {
+export async function rechercherPieces(user: PermissionUser, opts: { q?: string; categorie?: string; bas?: boolean; page: number; orderBy?: Prisma.PieceOrderByWithRelationInput[] }) {
   const q = opts.q?.trim();
   const croisees = q ? await idsParReferenceCroisee(q) : [];
   const base: Prisma.PieceWhereInput = {
@@ -84,7 +85,7 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
   // "Sous le seuil" : comparaison entre deux colonnes → on filtre via SQL brut sur les identifiants.
   let where = base;
   if (opts.bas) {
-    const ids = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Piece" WHERE "isActive" = true AND stock <= "seuilAlerte"`;
+    const ids = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Piece" WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte"`;
     where = { AND: [base, { id: { in: ids.map((r) => r.id) } }] };
   }
   const alertes = await compterAlertes();
@@ -100,12 +101,13 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
   let rows: PieceRow[];
   if (q) {
     // Recherche : les pièces réellement en stock remontent d'abord (tri fait ici, le volume d'une recherche reste faible).
-    const tout = await db.piece.findMany({ where, orderBy: { nom: "asc" }, take: 300 });
-    tout.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
+    const tout = await db.piece.findMany({ where, orderBy: opts.orderBy ?? { nom: "asc" }, take: 300 });
+    // Sans tri choisi, les pièces en stock d'abord.
+    if (!opts.orderBy) tout.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
     total = tout.length;
     rows = tout.slice((opts.page - 1) * PAGE_SIZE_PIECES, opts.page * PAGE_SIZE_PIECES);
   } else {
-    [total, rows] = await Promise.all([db.piece.count({ where }), db.piece.findMany({ where, orderBy: { nom: "asc" }, skip: (opts.page - 1) * PAGE_SIZE_PIECES, take: PAGE_SIZE_PIECES })]);
+    [total, rows] = await Promise.all([db.piece.count({ where }), db.piece.findMany({ where, orderBy: opts.orderBy ?? { nom: "asc" }, skip: (opts.page - 1) * PAGE_SIZE_PIECES, take: PAGE_SIZE_PIECES })]);
   }
   return {
     total,
@@ -116,12 +118,12 @@ export async function rechercherPieces(user: PermissionUser, opts: { q?: string;
 }
 
 export async function compterAlertes(): Promise<number> {
-  const r = await db.$queryRaw<{ n: bigint }[]>`SELECT COUNT(*)::bigint AS n FROM "Piece" WHERE "isActive" = true AND stock <= "seuilAlerte"`;
+  const r = await db.$queryRaw<{ n: bigint }[]>`SELECT COUNT(*)::bigint AS n FROM "Piece" WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte"`;
   return Number(r[0]?.n ?? 0);
 }
 
 export async function piecesEnAlerte(limit = 5) {
   return db.$queryRaw<{ id: string; nom: string; stock: number; seuilAlerte: number }[]>`
     SELECT id, nom, stock, "seuilAlerte" FROM "Piece"
-    WHERE "isActive" = true AND stock <= "seuilAlerte" ORDER BY (stock - "seuilAlerte") ASC, nom ASC LIMIT ${limit}`;
+    WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte" ORDER BY (stock - "seuilAlerte") ASC, nom ASC LIMIT ${limit}`;
 }

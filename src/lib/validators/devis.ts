@@ -7,6 +7,8 @@ export const ligneSchema = z
     designation: z.string().trim().min(1, "La désignation est requise").max(200),
     quantite: z.number().positive("La quantité doit être positive").max(10000),
     prixUnitaireHT: z.number().min(0, "Prix invalide").max(100000),
+    /** Prix unitaire TTC saisi : il fait foi (le HT en est déduit côté serveur). Absent : déduit du HT. */
+    prixUnitaireTTC: z.number().min(0, "Prix invalide").max(130000).nullable().optional(),
     /** Prix catalogue avant réduction professionnelle (lignes « Pièce » uniquement) : sert à tracer la remise. */
     prixCatalogueHT: z.number().min(0).max(100000).nullable().optional(),
     tvaRate: z.number().min(0).max(30),
@@ -20,6 +22,17 @@ export const ligneSchema = z
     }
   });
 
+/** Remise globale (devis et facture) : en € ou en %, calculée sur le total HT ou TTC. */
+export const remiseGlobaleSchema = z
+  .object({
+    type: z.enum(["EUROS", "POURCENT"]),
+    base: z.enum(["HT", "TTC"]),
+    valeur: z.number().min(0, "Remise invalide").max(1_000_000),
+  })
+  .superRefine((r, ctx) => {
+    if (r.type === "POURCENT" && r.valeur >= 100) ctx.addIssue({ code: "custom", path: ["valeur"], message: "Le pourcentage doit être inférieur à 100" });
+  });
+
 export const devisSchema = z
   .object({
     type: z.enum(["MECANIQUE", "PIECE"]),
@@ -31,6 +44,8 @@ export const devisSchema = z
     lignes: z.array(ligneSchema).min(1, "Ajoutez au moins une ligne").max(60),
     /** Seuil d'alerte des pièces : alerte dans l'éditeur et bon de commande automatique à la validation. */
     priseEnCompteSeuil: z.boolean().optional(),
+    /** Remise globale sur le total (reprise sur la facture). */
+    remise: remiseGlobaleSchema.nullable().optional(),
     /** Modification : « Enregistrer en brouillon » repasse le devis en BROUILLON (sinon le statut ne change pas). */
     brouillon: z.boolean().optional(),
   })

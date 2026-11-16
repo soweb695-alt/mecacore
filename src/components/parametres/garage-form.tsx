@@ -51,6 +51,15 @@ export function GarageForm({ initial }: { initial: Values }) {
       <Field label="N° de TVA intracommunautaire" htmlFor="tvaNumber" error={errors.tvaNumber?.message}>
         <Input id="tvaNumber" className="uppercase" placeholder="FR…" aria-invalid={!!errors.tvaNumber} {...register("tvaNumber")} />
       </Field>
+      <Field label="Forme juridique" htmlFor="formeJuridique" error={errors.formeJuridique?.message} hint="SARL, SAS, EI…">
+        <Input id="formeJuridique" {...register("formeJuridique")} />
+      </Field>
+      <Field label="Capital social" htmlFor="capitalSocial" error={errors.capitalSocial?.message} hint="Ex. 10 000 €">
+        <Input id="capitalSocial" {...register("capitalSocial")} />
+      </Field>
+      <Field label="Immatriculation RCS / RM" htmlFor="rcs" error={errors.rcs?.message} className="sm:col-span-2" hint="Ex. RCS Lyon 123 456 789">
+        <Input id="rcs" {...register("rcs")} />
+      </Field>
       <div className="sm:col-span-2">
         <SubmitButton pending={isSubmitting}>Enregistrer</SubmitButton>
       </div>

@@ -7,6 +7,8 @@ export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 1
 export interface LigneCalcul {
   quantite: number;
   prixUnitaireHT: number;
+  /** Prix unitaire TTC saisi : c'est lui qui fait foi. Absent (anciennes lignes) : déduit du HT, arrondi au centime. */
+  prixUnitaireTTC?: number | null;
   tvaRate: number;
 }
 
@@ -16,26 +18,51 @@ export interface Totaux {
   totalTTC: number;
 }
 
-/** Total HT d'une ligne : quantité × prix unitaire, arrondi au centime. */
-export function totalLigneHT(l: Pick<LigneCalcul, "quantite" | "prixUnitaireHT">): number {
-  return fromCents(Math.round(l.quantite * toCents(l.prixUnitaireHT)));
+/** PU TTC au centime à partir d'un PU HT (catalogue, tarif, remise pro). */
+export const prixTTCDepuisHT = (ht: number, tvaRate: number): number => fromCents(Math.round((toCents(ht) * (100 + tvaRate)) / 100));
+/** PU HT au centime à partir d'un PU TTC saisi (affichage et colonne prixUnitaireHT). */
+export const prixHTDepuisTTC = (ttc: number, tvaRate: number): number => fromCents(Math.round((toCents(ttc) * 100) / (100 + tvaRate)));
+
+/** PU TTC qui fait foi pour une ligne. */
+export function prixUnitaireTTC(l: Pick<LigneCalcul, "prixUnitaireHT" | "prixUnitaireTTC" | "tvaRate">): number {
+  return l.prixUnitaireTTC != null ? l.prixUnitaireTTC : prixTTCDepuisHT(l.prixUnitaireHT, l.tvaRate);
 }
 
 /**
- * totalHT = Σ(quantité × PU) ; totalTVA = Σ(ligneHT × taux / 100) ; totalTTC = HT + TVA.
- * Arrondi à 2 décimales sur le total (TVA calculée sur la somme exacte des lignes).
+ * Montants d'une ligne, le TTC faisant foi : TTC = quantité × PU TTC (au centime), HT = TTC ÷ (1 + taux) au centime,
+ * TVA = TTC − HT. Le TTC affiché est ainsi toujours celui saisi (35,00 € reste 35,00 €).
  */
+export function montantsLigne(l: LigneCalcul): Totaux {
+  const ttc = Math.round(l.quantite * toCents(prixUnitaireTTC(l)));
+  const ht = Math.round((ttc * 100) / (100 + l.tvaRate));
+  return { totalHT: fromCents(ht), totalTVA: fromCents(ttc - ht), totalTTC: fromCents(ttc) };
+}
+
+/** Total HT d'une ligne (déduit de son TTC). */
+export function totalLigneHT(l: LigneCalcul): number {
+  return montantsLigne(l).totalHT;
+}
+
+/** Colonnes de prix à enregistrer pour une ligne : PU TTC (fait foi), PU HT déduit, total HT de la ligne. */
+export function prixLigne(l: LigneCalcul): { prixUnitaireTTC: number; prixUnitaireHT: number; totalHT: number } {
+  const ttc = prixUnitaireTTC(l);
+  return {
+    prixUnitaireTTC: ttc,
+    prixUnitaireHT: l.prixUnitaireTTC != null ? prixHTDepuisTTC(ttc, l.tvaRate) : l.prixUnitaireHT,
+    totalHT: montantsLigne(l).totalHT,
+  };
+}
+
+/** Totaux = somme des montants de lignes (en centimes) : totalTTC = Σ TTC saisis, totalHT + totalTVA = totalTTC. */
 export function calculerTotaux(lignes: LigneCalcul[]): Totaux {
   let ht = 0;
-  let tva = 0;
+  let ttc = 0;
   for (const l of lignes) {
-    const ligneCents = Math.round(l.quantite * toCents(l.prixUnitaireHT));
-    ht += ligneCents;
-    tva += (ligneCents * l.tvaRate) / 100;
+    const m = montantsLigne(l);
+    ht += toCents(m.totalHT);
+    ttc += toCents(m.totalTTC);
   }
-  const totalHT = fromCents(ht);
-  const totalTVA = fromCents(Math.round(tva));
-  return { totalHT, totalTVA, totalTTC: round2(totalHT + totalTVA) };
+  return { totalHT: fromCents(ht), totalTVA: fromCents(ttc - ht), totalTTC: fromCents(ttc) };
 }
 
 /** Remise PRO : appliquée sur le prix unitaire HT des seules lignes de type PIECE. */
@@ -84,4 +111,36 @@ export function appliquerRemiseGlobale(t: Totaux, r: RemiseGlobale | null | unde
     newTVA = reste - newHT;
   }
   return { totalHT: fromCents(newHT), totalTVA: fromCents(newTVA), totalTTC: fromCents(newHT + newTVA), montantRemise: fromCents(d), totalHTAvantRemise: t.totalHT };
+}
+
+/** Marge sur prix de vente HT : montant (€ HT) et taux sur le prix de vente (%, 1 décimale). */
+export function calculerMarge(venteHT: number, achatHT: number): { montant: number; pct: number } {
+  const montant = fromCents(toCents(venteHT) - toCents(achatHT));
+  return { montant, pct: venteHT > 0 ? Math.round((montant / venteHT) * 1000) / 10 : 0 };
+}
+
+/** « 12,40 € HT · 31 % » */
+export const formatMarge = (m: { montant: number; pct: number }): string =>
+  `${formatEUR(m.montant)} HT · ${m.pct.toLocaleString("fr-FR")} %`;
+
+/** Colonnes de remise globale à enregistrer (devis ou facture). Lève RangeError si la remise dépasse le total. */
+export function colonnesRemiseGlobale(t: Totaux, remise: RemiseGlobale | null | undefined) {
+  const r = remise && remise.valeur > 0 ? remise : null;
+  const x = appliquerRemiseGlobale(t, r);
+  return {
+    totalHT: x.totalHT,
+    totalTVA: x.totalTVA,
+    totalTTC: x.totalTTC,
+    remiseGlobaleType: r?.type ?? null,
+    remiseGlobaleBase: r?.base ?? null,
+    remiseGlobaleValeur: r?.valeur ?? 0,
+    remiseGlobaleMontant: x.montantRemise,
+    totalHTAvantRemise: r ? x.totalHTAvantRemise : null,
+  };
+}
+
+/** Remise globale relue en base (null si aucune). */
+export function lireRemiseGlobale(d: { remiseGlobaleType: "EUROS" | "POURCENT" | null; remiseGlobaleBase: "HT" | "TTC" | null; remiseGlobaleValeur: unknown }): RemiseGlobale | null {
+  const v = Number(d.remiseGlobaleValeur);
+  return d.remiseGlobaleType && d.remiseGlobaleBase && v > 0 ? { type: d.remiseGlobaleType, base: d.remiseGlobaleBase, valeur: v } : null;
 }

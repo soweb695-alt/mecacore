@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Field } from "@/components/forms/field";
@@ -10,6 +10,7 @@ import { SubmitButton, useCloseDialog } from "@/components/forms/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client-api";
+import { calculerMarge, formatEUR, formatMarge, prixTTCDepuisHT } from "@/lib/money";
 import { pieceSchema } from "@/lib/validators/piece";
 
 const formSchema = pieceSchema.omit({ referencesCroisees: true }).extend({ refs: z.string().max(900) });
@@ -26,16 +27,18 @@ export interface PieceFormPiece {
   prixVenteHT: number;
   stock: number;
   seuilAlerte: number;
+  alerteActive?: boolean;
   taillePneu: string | null;
   referencesCroisees: string[];
 }
 
-export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAchat: boolean }) {
+export function PieceForm({ piece, voirAchat, voirMarge = false }: { piece?: PieceFormPiece; voirAchat: boolean; voirMarge?: boolean }) {
   const router = useRouter();
   const onDone = useCloseDialog();
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(formSchema),
@@ -49,6 +52,7 @@ export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAc
       prixVenteHT: piece?.prixVenteHT ?? 0,
       stock: piece?.stock ?? 0,
       seuilAlerte: piece?.seuilAlerte ?? 0,
+      alerteActive: piece?.alerteActive ?? true,
       taillePneu: piece?.taillePneu ?? "",
       refs: piece?.referencesCroisees.join(", ") ?? "",
     },
@@ -66,6 +70,12 @@ export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAc
       toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
     }
   }
+
+  // Aperçu en direct : prix TTC (TVA 20 %) et marge (administrateur uniquement).
+  const [venteSaisie, achatSaisie] = useWatch({ control, name: ["prixVenteHT", "prixAchatHT"] });
+  const vente = Number(venteSaisie) || 0;
+  const achatSaisi = Number(achatSaisie) || 0;
+  const marge = voirMarge && voirAchat ? calculerMarge(vente, achatSaisi) : null;
 
   const num = (name: "prixAchatHT" | "prixVenteHT" | "stock" | "seuilAlerte") => register(name, { valueAsNumber: true });
 
@@ -105,6 +115,21 @@ export function PieceForm({ piece, voirAchat }: { piece?: PieceFormPiece; voirAc
         <Field label="Seuil d'alerte" htmlFor="seuilAlerte" error={errors.seuilAlerte?.message}>
           <Input id="seuilAlerte" type="number" aria-invalid={!!errors.seuilAlerte} {...num("seuilAlerte")} />
         </Field>
+        <p className="col-span-full text-sm tabular-nums" aria-live="polite">
+          Prix de vente <b>{formatEUR(prixTTCDepuisHT(vente, 20))} TTC</b> <span className="text-muted-foreground">(TVA 20 %)</span>
+          {marge && (
+            <>
+              {" · "}Marge <b className={marge.montant < 0 ? "text-destructive" : undefined}>{formatMarge(marge)}</b>
+            </>
+          )}
+        </p>
+        <label className="col-span-full flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5 size-4 accent-primary" {...register("alerteActive")} />
+          <span>
+            Alerter quand le stock atteint le seuil
+            <span className="block text-xs text-muted-foreground">Décoché : aucune alerte (liste, tableau de bord, devis) ni bon de commande automatique pour cette pièce.</span>
+          </span>
+        </label>
       </div>
       <Field label="Taille de pneu (optionnel)" htmlFor="taillePneu" error={errors.taillePneu?.message}>
         <Input id="taillePneu" placeholder="205/55 R16" aria-invalid={!!errors.taillePneu} {...register("taillePneu")} />

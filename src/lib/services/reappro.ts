@@ -16,7 +16,7 @@ export function quantiteAReapprovisionner(stock: number, seuilAlerte: number): n
 export async function verifierReapprovisionnement(tx: Tx, pieceIds: string[]) {
   if (pieceIds.length === 0) return [];
   const pieces = await tx.piece.findMany({
-    where: { id: { in: [...new Set(pieceIds)] }, isActive: true, seuilAlerte: { gt: 0 } },
+    where: { id: { in: [...new Set(pieceIds)] }, isActive: true, alerteActive: true, seuilAlerte: { gt: 0 } },
     select: { id: true, fournisseur: true, stock: true, seuilAlerte: true },
     orderBy: { id: "asc" },
   });

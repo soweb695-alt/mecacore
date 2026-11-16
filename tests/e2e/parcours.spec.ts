@@ -103,19 +103,18 @@ test("3. rendez-vous : un créneau en conflit est refusé", async ({ page }) => 
 test("4. le mécanicien n'accède ni aux marges ni aux prix d'achat", async ({ page, request }) => {
   const fond = () => page.evaluate(() => getComputedStyle(document.querySelector("aside")!).backgroundColor);
 
-  // L'admin voit marge et prix d'achat. Thème bleu.
+  // L'admin voit marge et prix d'achat. Même barre latérale pour tous les rôles ; le rôle est affiché en texte.
   await login(page, E2E.admin.email, E2E.admin.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "ADMIN");
+  await expect(page.getByText("Administrateur", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Campagnes" })).toBeVisible();
-  expect(await fond()).toBe("rgb(29, 95, 209)");
+  expect(await fond()).toBe("rgb(255, 255, 255)");
   await page.goto("/stock");
   await expect(page.getByRole("columnheader", { name: "Prix achat HT" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Marge" })).toBeVisible();
   await logout(page);
 
-  // Le magasin (rôle SECRETARIAT) : thème par défaut (barre blanche), prix d'achat visible mais pas la marge.
+  // Le magasin (rôle SECRETARIAT) : prix d'achat visible mais pas la marge.
   await login(page, E2E.secretariat.email, E2E.secretariat.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "SECRETARIAT");
   expect(await fond()).toBe("rgb(255, 255, 255)");
   await expect(page.getByText("Magasin", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Campagnes" })).toBeVisible();
@@ -128,10 +127,9 @@ test("4. le mécanicien n'accède ni aux marges ni aux prix d'achat", async ({ p
   expect(stockSec).not.toMatch(/margePct/);
   await logout(page);
 
-  // L'atelier (rôle MECANICIEN) : thème gris anthracite, navigation réduite, pages et API interdites.
+  // L'atelier (rôle MECANICIEN) : navigation réduite, pages et API interdites.
   await login(page, E2E.mecanicien.email, E2E.mecanicien.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "MECANICIEN");
-  expect(await fond()).toBe("rgb(55, 65, 81)");
+  expect(await fond()).toBe("rgb(255, 255, 255)");
   await expect(page.getByText("Atelier", { exact: true }).first()).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   await expect(nav.getByRole("link")).toHaveCount(2);
@@ -277,7 +275,7 @@ test("11. onglet Campagnes : le Magasin prépare une campagne e-mail", async ({ 
   await d.getByRole("button", { name: "Créer la campagne" }).click();
   await expect(page.getByText("Campagne créée")).toBeVisible();
   await expect(page.getByRole("row", { name: /Pneus hiver/ }).getByText("Brouillon")).toBeVisible();
-  await expect(page.getByText(/clé Brevo manquante/)).toBeVisible();
+  await expect(page.getByText(/pas encore configuré \(Brevo, voir Mon Garage\)/)).toBeVisible();
 });
 
 test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis facture brouillon émise par le Magasin", async ({ page }) => {
@@ -356,7 +354,7 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
 
 test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de contrôle ; facture manuelle avec remise globale et virement", async ({ page }) => {
   await login(page, E2E.admin.email, E2E.admin.password);
-  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Mon Garage" }).click();
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Coordonnées et horaires" }).click();
   await page.getByLabel("Téléphone").fill("04 78 00 00 00");
   await page.getByRole("button", { name: "Enregistrer" }).first().click();
   await expect(page.getByText("Informations du garage enregistrées")).toBeVisible();
@@ -364,6 +362,9 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await page.getByLabel("BIC").fill("PSSTFRPP");
   await page.getByRole("button", { name: "Enregistrer" }).last().click();
   await expect(page.getByText("Coordonnées bancaires enregistrées")).toBeVisible();
+  // Sans variables Brevo : état « non configuré » explicite et test d'envoi désactivé.
+  await expect(page.getByText(/Non configuré : BREVO_API_KEY et BREVO_SENDER_EMAIL manquent/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Envoyer le test" })).toBeDisabled();
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Paramètres" }).click();
   await page.getByLabel("Nouveau point de contrôle").fill("Géométrie");
   await page.getByRole("button", { name: "Ajouter" }).click();
@@ -436,7 +437,7 @@ test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; pu
   await expect(page.getByText("Brouillon", { exact: true }).first()).toBeVisible();
 
   // Retour consigné rattaché au client.
-  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Retours & Consignées" }).click();
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Retours et consignes" }).click();
   await page.getByRole("button", { name: "Nouveau retour" }).click();
   const r = page.getByRole("dialog");
   await r.getByLabel("Type").selectOption("CONSIGNE");
@@ -448,4 +449,47 @@ test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; pu
   await expect(page.getByText(/RET-\d{4}-0001 enregistré/)).toBeVisible();
   await expect(page.getByRole("row", { name: /Étrier échange standard/ })).toContainText("Sophie Leroy");
   await expect(page.getByText("45,00 €").first()).toBeVisible();
+});
+
+test("16. devis : PU HT et PU TTC se mettent à jour l'un l'autre ; 2 × 17,50 € TTC = 35,00 € (et non 34,99 €)", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/devis/nouveau");
+  await page.getByLabel("Type de devis").selectOption("PIECE");
+  await page.getByLabel("Rechercher un client", { exact: true }).fill("Sophie");
+  await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
+  await page.getByLabel("Ajouter : Frais divers").selectOption("__libre");
+  await page.getByLabel("Désignation").fill("Contrôle éclairage");
+
+  // Saisie du HT : le TTC suit immédiatement, ainsi que les totaux.
+  await page.getByLabel("Prix unitaire HT").fill("29,17");
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("35");
+
+  // Saisie du TTC : le HT suit ; le total TTC est exactement celui saisi.
+  await page.getByLabel("Quantité").fill("2");
+  await page.getByLabel("Prix unitaire TTC").fill("17,50");
+  await expect(page.getByLabel("Prix unitaire HT")).toHaveValue("14.58");
+  const totalTTC = page.locator("div", { hasText: /^Total TTC/ }).last();
+  await expect(totalTTC).toContainText("35,00");
+
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
+  await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
+  await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("17.5");
+  await expect(page.locator("div", { hasText: /^Total TTC/ }).last()).toContainText("35,00");
+});
+
+test("17. listes (Data Table) : tri serveur dans l'URL, tri et recherche dans le navigateur", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/clients");
+  await page.getByRole("columnheader", { name: "Client" }).getByRole("button").click();
+  await expect(page).toHaveURL(/tri=nom&ordre=(asc|desc)/);
+  await expect(page.getByRole("columnheader", { name: "Client" })).toHaveAttribute("aria-sort", /ascending|descending/);
+
+  await page.goto("/vehicules");
+  await page.getByRole("columnheader", { name: "Plaque" }).getByRole("button").click();
+  await expect(page.getByRole("columnheader", { name: "Plaque" })).toHaveAttribute("aria-sort", /ascending|descending/);
+  // Recherche insensible aux accents et à la casse.
+  await page.getByLabel("Filtrer ces véhicules…").fill("leroy");
+  await expect(page.getByRole("row", { name: /Leroy/ }).first()).toBeVisible();
+  await page.getByLabel("Filtrer ces véhicules…").fill("zzzz-aucun");
+  await expect(page.getByText("Aucune ligne ne correspond à cette recherche.")).toBeVisible();
 });

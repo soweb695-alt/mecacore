@@ -50,7 +50,18 @@ export type ResultatEnvoi = "envoye" | "simulation" | "deja" | "refuse" | "echec
 export async function envoyerEmail(e: Envoi & { subject: string; html: string; attachments?: { name: string; content: Buffer }[]; headers?: Record<string, string> }): Promise<ResultatEnvoi> {
   if (!(await verifierConsentement(e))) return "refuse";
   if (!(await reserver(e, "EMAIL", e.subject))) return "deja";
-  const r = await envoyerEmailBrevo({ to: e.destinataire, subject: e.subject, html: e.html, attachments: e.attachments, headers: e.headers });
+  // Expéditeur au nom du garage ; les réponses du client arrivent sur l'e-mail du garage (« Mon Garage »).
+  const g = await db.parametreGarage.findUnique({ where: { id: 1 }, select: { nomGarage: true, email: true } });
+  const r = await envoyerEmailBrevo({
+    to: e.destinataire,
+    subject: e.subject,
+    html: e.html,
+    attachments: e.attachments,
+    headers: e.headers,
+    nomExpediteur: g?.nomGarage,
+    repondreA: g?.email || undefined,
+    tag: e.template,
+  });
   await finaliser(e.cle, r);
   return r.ok ? "envoye" : r.simulation ? "simulation" : "echec";
 }

@@ -8,7 +8,7 @@ import { envoyerEmail } from "@/lib/services/messages";
 
 /**
  * Envoie le devis par e-mail (PDF en pièce jointe). Le devis ne passe de « Brouillon » à « Envoyé »
- * que si l'e-mail est réellement parti : sans clé Brevo (simulation) ou en cas d'échec, il reste « Brouillon ».
+ * que si l'e-mail est réellement parti : sans configuration Brevo (simulation) ou en cas d'échec, il reste « Brouillon ».
  * Sauvegarder ou imprimer ne change jamais le statut.
  */
 export async function envoyerDevisParEmail(id: string) {
@@ -34,7 +34,7 @@ export async function envoyerDevisParEmail(id: string) {
     attachments: [{ name: `${devis.numero}.pdf`, content: Buffer.from(doc.pdf) }],
   });
   if (res === "simulation") {
-    throw new ApiError(503, "L'envoi d'e-mails n'est pas configuré (clé Brevo manquante). Le devis reste en brouillon.", "EMAIL_NON_CONFIGURE");
+    throw new ApiError(503, "L'envoi d'e-mails n'est pas configuré (Brevo : voir Mon Garage › Envoi des e-mails). Le devis reste en brouillon.", "EMAIL_NON_CONFIGURE");
   }
   if (res !== "envoye") throw new ApiError(502, "L'e-mail n'a pas pu être envoyé. Le devis reste en brouillon.", "EMAIL_ECHEC");
   await db.devis.updateMany({ where: { id, statut: "BROUILLON" }, data: { statut: "ENVOYE" } });

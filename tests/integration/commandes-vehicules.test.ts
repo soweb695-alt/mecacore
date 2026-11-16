@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { enregistrerPaiement, creerFactureDepuisDevis } from "@/lib/services/factures";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
 import { creerBonCommande, modifierBonCommande, receptionnerBonCommande, supprimerBonCommande } from "@/lib/services/bl";
+import { compterAlertes, piecesEnAlerte } from "@/lib/services/pieces";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
 import { rechercherVehicules } from "@/lib/services/vehicules";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
@@ -44,6 +45,22 @@ describe("bons de commande automatiques", () => {
     const crees = await db.$transaction((tx) => verifierReapprovisionnement(tx, [b.p1.id]));
     expect(crees).toHaveLength(1);
     expect(await db.bonCommande.count()).toBe(2);
+  });
+});
+
+describe("alerte de seuil activable par pièce", () => {
+  it("une pièce sous le seuil avec l'alerte désactivée n'est ni signalée ni recommandée", async () => {
+    await db.piece.update({ where: { id: b.p1.id }, data: { stock: 1 } });
+    const avant = await compterAlertes();
+    expect((await piecesEnAlerte(50)).some((p) => p.id === b.p1.id)).toBe(true);
+    await db.piece.update({ where: { id: b.p1.id }, data: { alerteActive: false } });
+    expect(await compterAlertes()).toBe(avant - 1);
+    expect((await piecesEnAlerte(50)).some((p) => p.id === b.p1.id)).toBe(false);
+    expect(await db.$transaction((tx) => verifierReapprovisionnement(tx, [b.p1.id]))).toHaveLength(0);
+  });
+
+  it("est activée par défaut", async () => {
+    expect((await db.piece.findUniqueOrThrow({ where: { id: b.p1.id } })).alerteActive).toBe(true);
   });
 });
 

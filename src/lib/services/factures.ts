@@ -8,12 +8,13 @@ import { nomClient } from "@/lib/format";
 import { envoyerEmail } from "@/lib/services/messages";
 import { emailRecapImpayes } from "@/lib/messages/templates";
 import { prochainNumero } from "@/lib/numbering";
-import { appliquerRemiseGlobale, appliquerRemisePro, calculerTotaux, round2, totalLigneHT, type RemiseGlobale, type Totaux } from "@/lib/money";
+import { appliquerRemiseGlobale, appliquerRemisePro, calculerTotaux, lireRemiseGlobale, prixLigne, round2, type RemiseGlobale, type Totaux } from "@/lib/money";
 import { quantitesParPiece } from "@/lib/services/devis";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
 import type { LigneInput } from "@/lib/validators/devis";
 
 export interface OptionsFacture {
+  /** Remise globale. `undefined` : reprendre celle du (des) devis ; `null` : aucune remise. */
   remise?: RemiseGlobale | null;
   modePaiement?: "CB" | "ESPECES" | "CHEQUE" | "VIREMENT" | "PLUSIEURS_FOIS" | null;
 }
@@ -49,6 +50,7 @@ function copieLigneDevis(l: LigneDevisCopiee) {
     designation: l.designation,
     quantite: l.quantite,
     prixUnitaireHT: l.prixUnitaireHT,
+    prixUnitaireTTC: l.prixUnitaireTTC,
     prixCatalogueHT: l.prixCatalogueHT,
     tvaRate: l.tvaRate,
     totalHT: l.totalHT,
@@ -57,6 +59,17 @@ function copieLigneDevis(l: LigneDevisCopiee) {
     composition: (l.composition as Prisma.InputJsonValue | null) ?? undefined,
     position: l.position,
   };
+}
+
+type DevisTotaux = Prisma.DevisGetPayload<{ include: { lignes: true } }>;
+
+/**
+ * Totaux d'un devis avant sa remise globale. Sans remise : les totaux enregistrés (un ancien devis garde ses
+ * montants au centime près) ; avec remise : recalculés depuis les lignes.
+ */
+function totauxAvantRemiseDevis(d: DevisTotaux): Totaux {
+  if (d.totalHTAvantRemise === null) return { totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) };
+  return calculerTotaux(d.lignes.map((l) => ({ quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, tvaRate: Number(l.tvaRate) })));
 }
 
 /** OR traité par le Magasin : passage en « Facturé » et fiche de contrôle marquée traitée. */
@@ -90,6 +103,12 @@ export async function creerBrouillonTx(tx: Tx, ordreId: string) {
       totalHT: o.devis.totalHT,
       totalTVA: o.devis.totalTVA,
       totalTTC: o.devis.totalTTC,
+      // Remise globale du devis reprise telle quelle.
+      remiseGlobaleType: o.devis.remiseGlobaleType,
+      remiseGlobaleBase: o.devis.remiseGlobaleBase,
+      remiseGlobaleValeur: o.devis.remiseGlobaleValeur,
+      remiseGlobaleMontant: o.devis.remiseGlobaleMontant,
+      totalHTAvantRemise: o.devis.totalHTAvantRemise,
       lignes: { create: o.devis.lignes.map(copieLigneDevis) },
     },
     select: { id: true, statut: true },
@@ -126,10 +145,9 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
               type: l.type,
               designation: l.designation,
               quantite: l.quantite,
-              prixUnitaireHT: l.prixUnitaireHT,
+              ...prixLigne(l),
               prixCatalogueHT: l.type === "PIECE" ? (l.prixCatalogueHT ?? null) : null,
               tvaRate: l.tvaRate,
-              totalHT: totalLigneHT(l),
               prixAchatHT: l.pieceId ? (achat.get(l.pieceId) ?? null) : null,
               pieceId: l.type === "PIECE" ? (l.pieceId ?? null) : null,
               // Les pièces d'un forfait ne suivent que la ligne d'origine (jamais fournies par le client).
@@ -207,7 +225,7 @@ export async function creerFactureDepuisDevis(devisId: string, userId?: string, 
         dateEmission: now,
         dateEcheance: ajouterJours(now, devis.client.paymentTerms ?? 30),
         remisePro: devis.remisePro,
-        ...totauxEtRemise({ totalHT: Number(devis.totalHT), totalTVA: Number(devis.totalTVA), totalTTC: Number(devis.totalTTC) }, opts),
+        ...totauxEtRemise(totauxAvantRemiseDevis(devis), { ...opts, remise: opts?.remise !== undefined ? opts.remise : lireRemiseGlobale(devis) }),
         statut: "EMISE",
         kilometrage: devis.ordre?.kilometrage ?? devis.kilometrage,
         lignes: { create: devis.lignes.map(copieLigneDevis) },
@@ -249,21 +267,28 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
       if (b.factureId || b.devis?.facture) throw new ApiError(409, `${b.numero} est déjà facturé`, "DEJA_FACTURE");
     }
 
-    const remise = client.type === "PRO" ? Number(client.discountRate) : 0;
-    const lignes: { type: "MAIN_OEUVRE" | "FORFAIT" | "PIECE" | "FRAIS_DIVERS"; designation: string; quantite: number; prixUnitaireHT: number; prixCatalogueHT: number | null; tvaRate: number; prixAchatHT: number | null; pieceId: string | null; composition?: Prisma.InputJsonValue }[] = [];
+    const remisePct = client.type === "PRO" ? Number(client.discountRate) : 0;
+    const lignes: { type: "MAIN_OEUVRE" | "FORFAIT" | "PIECE" | "FRAIS_DIVERS"; designation: string; quantite: number; prixUnitaireHT: number; prixUnitaireTTC?: number | null; prixCatalogueHT: number | null; tvaRate: number; prixAchatHT: number | null; pieceId: string | null; composition?: Prisma.InputJsonValue }[] = [];
     for (const b of bons) {
       if (b.devis) {
         for (const l of b.devis.lignes) {
-          lignes.push({ type: l.type, designation: l.designation, quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null, tvaRate: Number(l.tvaRate), prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId, composition: (l.composition as Prisma.InputJsonValue | null) ?? undefined });
+          lignes.push({ type: l.type, designation: l.designation, quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null, tvaRate: Number(l.tvaRate), prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId, composition: (l.composition as Prisma.InputJsonValue | null) ?? undefined });
         }
       } else {
         for (const l of b.lignes) {
           const vente = l.piece ? Number(l.piece.prixVenteHT) : 0;
-          lignes.push({ type: "PIECE", designation: l.designation || "Pièce", quantite: l.quantite, prixUnitaireHT: appliquerRemisePro(vente, remise), prixCatalogueHT: remise > 0 ? vente : null, tvaRate: 20, prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId });
+          lignes.push({ type: "PIECE", designation: l.designation || "Pièce", quantite: l.quantite, prixUnitaireHT: appliquerRemisePro(vente, remisePct), prixCatalogueHT: remisePct > 0 ? vente : null, tvaRate: 20, prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId });
         }
       }
     }
     const totaux = calculerTotaux(lignes);
+    // Sans remise saisie : les remises globales des devis sont reprises, en euros sur le TTC (le client paie
+    // exactement la somme des TTC de ses devis).
+    let remise = opts?.remise;
+    if (remise === undefined) {
+      const reduction = bons.reduce((s, b) => (b.devis && b.devis.totalHTAvantRemise !== null ? s + (totauxAvantRemiseDevis(b.devis).totalTTC - Number(b.devis.totalTTC)) : s), 0);
+      remise = reduction > 0 ? { type: "EUROS", base: "TTC", valeur: round2(reduction) } : null;
+    }
     const now = new Date();
     const numero = await prochainNumero(tx, "FACTURE", now);
     const f = await tx.facture.create({
@@ -273,10 +298,10 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
         clientId: client.id,
         dateEmission: now,
         dateEcheance: ajouterJours(now, client.paymentTerms ?? 30),
-        remisePro: remise,
-        ...totauxEtRemise(totaux, opts),
+        remisePro: remisePct,
+        ...totauxEtRemise(totaux, { ...opts, remise }),
         statut: "EMISE",
-        lignes: { create: lignes.map((l, i) => ({ ...l, totalHT: totalLigneHT(l), position: i })) },
+        lignes: { create: lignes.map((l, i) => ({ ...l, ...prixLigne(l), position: i })) },
       },
     });
     const r = await tx.bonLivraison.updateMany({ where: { id: { in: ids }, factureId: null }, data: { factureId: f.id } });
@@ -334,10 +359,9 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
             type: l.type,
             designation: l.designation,
             quantite: l.quantite,
-            prixUnitaireHT: l.prixUnitaireHT,
+            ...prixLigne(l),
             prixCatalogueHT: l.type === "PIECE" ? (l.prixCatalogueHT ?? null) : null,
             tvaRate: l.tvaRate,
-            totalHT: totalLigneHT(l),
             prixAchatHT: l.pieceId ? (achat.get(l.pieceId) ?? null) : null,
             pieceId: l.pieceId ?? null,
             position: i,

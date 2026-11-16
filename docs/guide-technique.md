@@ -25,6 +25,13 @@ tests/                       unit/, integration/ (vraie base PostgreSQL), e2e/ (
 
 Le front lit les données directement côté serveur (composants serveur) et écrit via les routes API (`fetch` depuis des formulaires `react-hook-form` + `zod`).
 
+## Listes (Data Table)
+
+- `components/data-table/data-table-features.ts` : fonctionnalités TanStack Table v9 communes (`tableFeatures()` : filtrage + recherche globale sans accents, tri, sélection, pagination avec `createPaginatedRowModel()`), objet stable au niveau du module.
+- `components/data-table/data-table.tsx` : composant `DataTable` (rendu shadcn/ui `Table`), en-tête triable `EnTete`, colonne de cases `colonneSelection`.
+- Un fichier de colonnes par domaine (`components/<domaine>/columns.tsx`, composants client) ; les pages serveur passent des lignes sérialisables (dates ISO, montants en nombre) et les droits sous forme de booléens. Les colonnes réservées (prix d'achat, marge) ne sont pas créées et leurs valeurs ne sont pas envoyées aux rôles non autorisés.
+- Clients, devis, factures, stock, retours : mode serveur (`manualSorting`, `manualPagination`), état dans l'URL (`?page=&tri=&ordre=`) et colonnes triables limitées par `lib/tri.ts` (`lireTri`). Les autres listes sont traitées dans le navigateur.
+
 ## Rôles et droits
 
 Matrice unique dans `src/lib/permissions.ts`, utilisée par l'API, les pages serveur et la navigation.
@@ -44,11 +51,12 @@ Le prix d'achat est réservé à l'admin et au Magasin (`canSeePurchasePrice`), 
 
 - **Numérotation** `{PREFIXE}-{ANNEE}-{0001}` : table `Compteur`, incrément atomique dans la transaction (`lib/numbering.ts`).
 - **Calculs** en centimes entiers (`lib/money.ts`), recalculés côté serveur ; les totaux envoyés par le navigateur sont ignorés.
+- **Le prix unitaire TTC fait foi** (`LigneDevis.prixUnitaireTTC`, `LigneFacture.prixUnitaireTTC`) : TTC ligne = quantité × PU TTC au centime, HT ligne = TTC ÷ (1 + taux) au centime, TVA = TTC − HT ; totaux = sommes des lignes. Le PU HT enregistré est déduit du TTC par le serveur (`prixLigne`). Les anciennes lignes sans PU TTC le déduisent du HT, arrondi au centime. Cette règle remplace la formule HT → TTC de la spécification (§ 5.2), qui produisait 34,99 € pour 2 × 17,50 € TTC.
 - **Validation d'un devis mécanique** (`services/devis.ts`) : une seule transaction — contrôle du stock (409 + détail par pièce), décrémentation atomique conditionnelle (`UPDATE … WHERE stock >= n`), création de l'OR et de ses tâches, passage en VALIDE. Un échec annule tout. Deux validations simultanées : une seule aboutit.
 - **Devis** : créé « Brouillon » ; il devient « Envoyé » uniquement quand l'envoi par e-mail (Brevo, PDF en pièce jointe) a réussi — simulation ou échec : il reste « Brouillon ». Validation et rejet possibles depuis Brouillon ou Envoyé ; modifiable jusqu'à validation/rejet. Mécanique : validation avec technicien et créneau obligatoires → rendez-vous + OR dans la même transaction. Pièces : bon de livraison « en attente » créé automatiquement, véhicule facultatif.
 - **Véhicule d'abord** : `Vehicule.clientId` est facultatif et modifiable ; kilométrage et prochain CT sur le véhicule (le kilométrage est aussi gardé sur chaque devis).
 - **Réapprovisionnement automatique** (`services/reappro.ts`) : une pièce au seuil d'alerte génère un bon de commande « en attente » (quantité 2 × seuil, regroupé par fournisseur, jamais deux fois pour la même pièce).
-- **Thème par rôle** : le layout racine lit la session et pose `data-role` sur `<html>` ; les couleurs sont des variables CSS (`globals.css`). Magasin : thème par défaut (barre blanche, boutons bleus) ; Atelier : gris anthracite #374151 ; Admin : bleu #1D5FD1.
+- **Interface** : une seule couleur d'accent (bleu #1D5FD1) pour l'action principale et les liens, la même barre latérale pour tous les rôles (le rôle est écrit sous le nom de l'utilisateur), police IBM Plex Sans. Hiérarchie par la taille et l'espace ; les couleurs de statut (vert, orange, rouge) ne servent qu'à signaler un état. Pas de dégradés, de cartes imbriquées ni de grands chiffres décoratifs.
 - **Couleur des collaborateurs** : `User.couleur` (#RRGGBB, facultative). `couleurCollaborateur(id, couleur)` renvoie la couleur choisie ou, à défaut, une couleur automatique déterministe ; utilisée par le planning, le formulaire de rendez-vous et l'analyse.
 - **BL livré** : `marquerLivre` passe le bon à « Livré » puis envoie le PDF (sans prix) par e-mail ; l'envoi est tracé dans `MessageLog` (template `bon_livraison`) et son échec n'annule jamais la livraison.
 - **Remise PRO** : appliquée par l'interface sur le prix unitaire des seules lignes « Pièce » ; le taux est tracé sur le devis puis la facture.
@@ -85,7 +93,7 @@ Le prix d'achat est réservé à l'admin et au Magasin (`canSeePurchasePrice`), 
 | Décodage plaque | `lib/integrations/vin.ts` (`decoderPlaque`) | Interface prête (`PLAQUE_DECODER_API_URL` / `PLAQUE_DECODER_API_KEY`) ; aucun fournisseur branché : saisie manuelle. Même format de réponse que le VIN. |
 | Entreprise (SIRET) | `lib/integrations/entreprise.ts` | API publique « Recherche d'entreprises » (data.gouv, sans clé) : raison sociale, SIRET, adresse, n° de TVA (déduit du SIREN si absent). |
 | Décodage VIN | `lib/integrations/vin.ts` | À adapter au contrat exact de l'API VinDecoderVehicle (URL dans `VIN_DECODER_API_URL`, clé dans `VIN_DECODER_API_KEY`). Sans clé ou en cas de délai > 3 s : saisie manuelle. |
-| E-mail | `brevo.ts` | API REST Brevo (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`). Sans clé : simulation tracée. |
+| E-mail | `brevo.ts` | API REST Brevo (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, les deux obligatoires ; sinon simulation tracée). Expéditeur au nom du garage, `replyTo` = e-mail du garage, étiquette = modèle. Erreurs Brevo conservées dans `MessageLog.erreur`. Vérification et e-mail de test : `/api/integrations/email` (Mon Garage). Voir `docs/brevo.md`. |
 | SMS | `sms-partner.ts` | API SMS Partner (`SMS_PARTNER_API_KEY`, `SMS_PARTNER_SENDER`). Sans clé : simulation tracée. |
 | Facture électronique | `facture-electronique.ts` | Interface `FactureElectroniqueProvider` + mock. À brancher quand les identifiants de la PA seront disponibles. Le Factur-X (PDF/A-3 avec XML) n'est pas généré : la PA ou une bibliothèque dédiée s'en chargera. |
 | Stockage | `storage.ts` | S3 compatible (`S3_*`). Sans configuration : dossier local `.storage/` (développement uniquement, à ne pas utiliser en production serverless). |

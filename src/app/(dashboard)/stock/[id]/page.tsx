@@ -7,11 +7,12 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { PieceForm } from "@/components/stock/piece-form";
+import { PieceImage } from "@/components/stock/piece-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { eur } from "@/lib/format";
-import { can, canSeePurchasePrice } from "@/lib/permissions";
+import { can, canSeeMargins, canSeePurchasePrice } from "@/lib/permissions";
 import { pieceVue } from "@/lib/services/pieces";
 import { requirePage } from "@/lib/session";
 
@@ -51,6 +52,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
               >
                 <PieceForm
                   voirAchat={achat}
+                  voirMarge={canSeeMargins(user)}
                   piece={{
                     id: p.id,
                     reference: p.reference,
@@ -62,6 +64,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
                     prixVenteHT: p.prixVenteHT,
                     stock: p.stock,
                     seuilAlerte: p.seuilAlerte,
+                    alerteActive: p.alerteActive,
                     taillePneu: p.taillePneu,
                     referencesCroisees: p.referencesCroisees,
                   }}
@@ -85,14 +88,22 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
           </>
         }
       />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Image</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieceImage id={p.id} nom={p.nom} version={p.imageMaj ? p.imageMaj.toISOString() : null} modifiable={can(user, "update", "piece")} />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Stock</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-semibold">{p.stock}</div>
-            <StatusBadge tone={p.enAlerte ? "warn" : "ok"}>{p.enAlerte ? `Sous le seuil (${p.seuilAlerte})` : `Seuil d'alerte : ${p.seuilAlerte}`}</StatusBadge>
+            <div className="text-lg font-semibold tabular-nums">{p.stock} en stock</div>
+            <StatusBadge tone={p.enAlerte ? "warn" : "ok"}>{!p.alerteActive ? "Alerte de seuil désactivée" : p.enAlerte ? `Sous le seuil (${p.seuilAlerte})` : `Seuil d'alerte : ${p.seuilAlerte}`}</StatusBadge>
           </CardContent>
         </Card>
         <Card>

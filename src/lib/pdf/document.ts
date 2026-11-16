@@ -7,6 +7,9 @@ export interface PdfLigne {
   prixUnitaireHT: number;
   tvaRate: number;
   totalHT: number;
+  /** PU TTC et total TTC de la ligne (le TTC fait foi). Absents : déduits du HT. */
+  prixUnitaireTTC?: number;
+  totalTTC?: number;
   /** Unité de la quantité (ex. « h » pour la main d'œuvre : le prix unitaire devient un taux horaire). */
   unite?: string;
   /** Mentions discrètes sous la désignation (référence, temps et taux horaire, pièces d'un forfait, remise…). */
@@ -18,7 +21,7 @@ export interface PdfDocData {
   numero: string;
   dateEmission: Date;
   dateSecondaire?: { label: string; date: Date };
-  garage: { nom: string; adresse: string; telephone: string; email: string; siret: string; tva: string; logo?: { bytes: Uint8Array; format: "png" | "jpg" } };
+  garage: { nom: string; adresse: string; telephone: string; email: string; siret: string; tva: string; mentions?: string; logo?: { bytes: Uint8Array; format: "png" | "jpg" } };
   client: { nom: string; adresse?: string | null; email?: string | null; siret?: string | null };
   /** Mentions obligatoires de la réparation automobile : véhicule, immatriculation, kilométrage. */
   vehicule?: { libelle: string; immatriculation: string; kilometrage: number | null } | null;
@@ -30,7 +33,7 @@ export interface PdfDocData {
   notes?: string[];
   paiement?: { paye: number; reste: number };
   /** Remise globale sur la facture : tracée ligne à ligne dans le bloc des totaux. */
-  remiseGlobale?: { libelle: string; montant: number; totalHTAvantRemise: number };
+  remiseGlobale?: { libelle: string; montant: number; totalHTAvantRemise: number; /** Remise sur le TTC : total TTC avant remise affiché. */ totalTTCAvantRemise?: number };
   /** Coordonnées bancaires du garage, affichées pour un règlement par virement. */
   virement?: { iban: string; bic: string; titulaire: string };
   /** Document de remise (bon de livraison) : ni prix, ni TVA, ni totaux. */
@@ -168,8 +171,8 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
       text(page, `${eur(l.prixUnitaireHT)}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.pu });
       text(page, `${nombre(l.tvaRate)} %`, 0, y, { right: cols.tva });
       if (d.prixTTC) {
-        text(page, `${eur(ttc(l.prixUnitaireHT, l.tvaRate))}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.puTTC });
-        text(page, eur(ttc(l.totalHT, l.tvaRate)), 0, y, { right: cols.tot, font: bold });
+        text(page, `${eur(l.prixUnitaireTTC ?? ttc(l.prixUnitaireHT, l.tvaRate))}${l.unite ? `/${l.unite}` : ""}`, 0, y, { right: cols.puTTC });
+        text(page, eur(l.totalTTC ?? ttc(l.totalHT, l.tvaRate)), 0, y, { right: cols.tot, font: bold });
       } else {
         text(page, eur(l.totalHT), 0, y, { right: cols.tot });
       }
@@ -193,7 +196,8 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
   };
   if (!d.sansPrix) {
     if (d.remiseGlobale) {
-      ligneTotal("Total HT avant remise", eur(d.remiseGlobale.totalHTAvantRemise));
+      if (d.remiseGlobale.totalTTCAvantRemise !== undefined) ligneTotal("Total TTC avant remise", eur(d.remiseGlobale.totalTTCAvantRemise));
+      else ligneTotal("Total HT avant remise", eur(d.remiseGlobale.totalHTAvantRemise));
       ligneTotal(d.remiseGlobale.libelle, `- ${eur(d.remiseGlobale.montant)}`);
     }
     ligneTotal("Total HT", eur(d.totaux.totalHT));
@@ -230,7 +234,7 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
 
   // Pied de page
   pdf.getPages().forEach((p, i, all) => {
-    text(p, `${d.garage.nom} · SIRET ${d.garage.siret} · TVA ${d.garage.tva}`, M, 28, { size: 7.5, color: GRIS });
+    text(p, [d.garage.nom, d.garage.mentions, `SIRET ${d.garage.siret}`, `TVA ${d.garage.tva}`].filter(Boolean).join(" · "), M, 28, { size: 7.5, color: GRIS });
     text(p, `Page ${i + 1}/${all.length}`, 0, 28, { size: 7.5, color: GRIS, right: W - M });
   });
 
