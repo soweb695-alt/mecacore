@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appliquerRemisePro, calculerMarge, calculerTotaux, formatMarge, montantsLigne, prixHTDepuisTTC, prixLigne, prixTTCDepuisHT, totalLigneHT } from "@/lib/money";
+import { appliquerRemisePro, calculerMarge, calculerTotaux, formatMarge, montantsLigne, prixHTDepuisTTC, prixLigne, prixTTCDepuisHT, prixVentePiece, totalLigneHT, venteHTDepuisMarge, venteHTDepuisTauxMarge } from "@/lib/money";
 
 describe("calculs de devis", () => {
   it("calcule HT, TVA et TTC sans erreur de flottant", () => {
@@ -78,5 +78,28 @@ describe("marge", () => {
     expect(calculerMarge(49.9, 28.4)).toEqual({ montant: 21.5, pct: 43.1 });
     expect(calculerMarge(0, 5)).toEqual({ montant: -5, pct: 0 });
     expect(formatMarge({ montant: 21.5, pct: 43.1 }).replace(/\s/g, " ")).toBe("21,50 € HT · 43,1 %");
+  });
+});
+
+describe("prix de vente d'une pièce (TTC qui fait foi, marge modifiable)", () => {
+  it("TTC fourni : conservé, HT déduit au centime", () => {
+    expect(prixVentePiece({ prixVenteHT: 0, prixVenteTTC: 35 })).toEqual({ prixVenteHT: 29.17, prixVenteTTC: 35 });
+    expect(prixVentePiece({ prixVenteHT: 0, prixVenteTTC: 0.09 })).toEqual({ prixVenteHT: 0.08, prixVenteTTC: 0.09 });
+  });
+  it("sans TTC : calculé depuis le HT, et le HT saisi est toujours retrouvé depuis ce TTC", () => {
+    expect(prixVentePiece({ prixVenteHT: 29.17 })).toEqual({ prixVenteHT: 29.17, prixVenteTTC: 35 });
+    for (let c = 0; c <= 20000; c++) {
+      const ht = c / 100;
+      expect(prixHTDepuisTTC(prixTTCDepuisHT(ht, 20), 20)).toBe(ht);
+    }
+  });
+  it("marge en € ou en % (sur le prix de vente) → prix de vente HT", () => {
+    expect(venteHTDepuisMarge(10, 5)).toBe(15);
+    expect(venteHTDepuisMarge(0.1, 0.2)).toBe(0.3);
+    expect(venteHTDepuisTauxMarge(10, 50)).toBe(20);
+    expect(venteHTDepuisTauxMarge(10, 33.3)).toBe(14.99);
+    expect(calculerMarge(venteHTDepuisTauxMarge(28.4, 43.1)!, 28.4).pct).toBe(43.1);
+    expect(venteHTDepuisTauxMarge(10, 100)).toBeNull();
+    expect(venteHTDepuisTauxMarge(0, 30)).toBeNull();
   });
 });

@@ -238,6 +238,8 @@ model Piece {
   categorie          String?
   prixAchatHT        Decimal  @default(0) @db.Decimal(10, 2)
   prixVenteHT        Decimal  @default(0) @db.Decimal(10, 2)
+  /// Prix de vente TTC (TVA 20 %) : il fait foi, le HT en est déduit au centime.
+  prixVenteTTC       Decimal  @default(0) @db.Decimal(10, 2)
   stock              Int      @default(0)
   seuilAlerte        Int      @default(0)
   /// Faux : la pièce ne déclenche aucune alerte de seuil (liste, tableau de bord, devis) ni bon de commande automatique.

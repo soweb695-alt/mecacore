@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { prixVentePiece } from "@/lib/money";
 import { canSeePurchasePrice, type PermissionUser } from "@/lib/permissions";
 import { analyserLignes, type LigneAnalysee, type PieceImport } from "@/lib/import-pieces";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
@@ -75,7 +76,7 @@ export async function importerPieces(user: PermissionUser, rows: string[][], app
             ...(v.fournisseur !== undefined ? { fournisseur: v.fournisseur } : {}),
             ...(v.categorie !== undefined ? { categorie: v.categorie } : {}),
             ...(achatAutorise && v.prixAchatHT !== undefined ? { prixAchatHT: v.prixAchatHT } : {}),
-            ...(v.prixVenteHT !== undefined ? { prixVenteHT: v.prixVenteHT } : {}),
+            ...(v.prixVenteHT !== undefined ? prixVentePiece({ prixVenteHT: v.prixVenteHT }) : {}),
             ...(v.seuilAlerte !== undefined ? { seuilAlerte: v.seuilAlerte } : {}),
             ...(v.taillePneu !== undefined ? { taillePneu: v.taillePneu } : {}),
             ...(v.referencesCroisees !== undefined ? { referencesCroisees: v.referencesCroisees } : {}),
@@ -84,7 +85,7 @@ export async function importerPieces(user: PermissionUser, rows: string[][], app
             await tx.piece.update({ where: { id: existante.id }, data: { ...commun, isActive: true, ...(v.stock ? { stock: { increment: v.stock } } : {}) } });
             touchees.push(existante.id);
           } else {
-            const p = await tx.piece.create({ data: { reference: v.reference, nom: v.nom!, prixVenteHT: v.prixVenteHT!, ...commun, stock: v.stock ?? 0 }, select: { id: true } });
+            const p = await tx.piece.create({ data: { reference: v.reference, nom: v.nom!, ...prixVentePiece({ prixVenteHT: v.prixVenteHT! }), ...commun, stock: v.stock ?? 0 }, select: { id: true } });
             touchees.push(p.id);
           }
         }

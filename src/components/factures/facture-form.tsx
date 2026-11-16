@@ -48,6 +48,7 @@ interface PieceHit {
   reference: string;
   nom: string;
   prixVenteHT: number;
+  prixVenteTTC?: number;
   stock: number;
   referenceCroisee?: string | null;
 }
@@ -91,7 +92,7 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
   const ajouterPiece = (p: PieceHit) =>
     setLignes((ls) => [
       ...ls,
-      { key: cle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(appliquerRemisePro(p.prixVenteHT, client?.remisePct ?? 0)), tvaRate: "20", pieceId: p.id, stock: p.stock, prixCatalogueHT: p.prixVenteHT },
+      { key: cle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...(!client?.remisePct && p.prixVenteTTC ? { prixUnitaireHT: String(prixHTDepuisTTC(p.prixVenteTTC, 20)), prixTTC: String(p.prixVenteTTC) } : avecHT(appliquerRemisePro(p.prixVenteHT, client?.remisePct ?? 0))), tvaRate: "20", pieceId: p.id, stock: p.stock, prixCatalogueHT: p.prixVenteHT },
     ]);
 
   // La remise professionnelle suit le client : les pièces du stock sont recalculées depuis leur prix catalogue.
@@ -193,7 +194,7 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
                     {p.referenceCroisee && <span className="block text-xs text-muted-foreground">Équivalent de {p.referenceCroisee}</span>}
                   </span>
                   <span className={p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}>
-                    {formatEUR(p.prixVenteHT)} · stock {p.stock}
+                    {formatEUR(p.prixVenteHT)} HT · stock {p.stock}
                   </span>
                 </span>
               )}

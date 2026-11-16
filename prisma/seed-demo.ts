@@ -30,7 +30,7 @@ async function main() {
     { reference: "MIC-2055516", nom: "Pneu Michelin 205/55 R16", marque: "Michelin", fournisseur: "Euromaster", categorie: "Pneumatiques", prixAchatHT: 74, prixVenteHT: 112, stock: 12, seuilAlerte: 4, taillePneu: "205/55 R16", referencesCroisees: [] },
     { reference: "BSH-DISQ-308", nom: "Disques de frein avant (paire)", marque: "Bosch", fournisseur: "Autodis", categorie: "Freinage", prixAchatHT: 96, prixVenteHT: 189, stock: 6, seuilAlerte: 2, referencesCroisees: [] },
   ];
-  for (const p of pieces) await db.piece.upsert({ where: { reference: p.reference }, update: {}, create: p });
+  for (const p of pieces) await db.piece.upsert({ where: { reference: p.reference }, update: {}, create: { ...p, prixVenteTTC: Math.round(p.prixVenteHT * 120) / 100 } });
   console.log("Données de démonstration chargées.");
 }
 

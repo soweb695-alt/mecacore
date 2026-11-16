@@ -39,6 +39,8 @@ interface LigneState {
   prixAchatHT?: number;
   /** Prix catalogue de la pièce avant réduction professionnelle (sert au recalcul et à la traçabilité). */
   prixCatalogueHT: number | null;
+  /** Prix catalogue TTC de la pièce (il fait foi tant qu'aucune réduction ne s'applique). */
+  prixCatalogueTTC?: number | null;
   /** true dès que le prix unitaire a été saisi à la main : la remise automatique ne le touche plus. */
   prixManuel: boolean;
   /** Forfait des tarifs : ses pièces sont décrémentées du stock à la validation du devis. */
@@ -91,6 +93,7 @@ interface PieceHit {
   reference: string;
   nom: string;
   prixVenteHT: number;
+  prixVenteTTC?: number;
   stock: number;
   seuilAlerte?: number;
   /** Faux : alerte de seuil désactivée sur la pièce. */
@@ -125,6 +128,12 @@ const versTTC = prixTTCDepuisHT;
 const versHT = prixHTDepuisTTC;
 /** Prix HT fixé par le programme ou saisi (catalogue, tarif, remise) : le prix TTC suit, au centime. */
 const avecHT = (ht: number, taux: number) => ({ prixUnitaireHT: String(ht), prixTTC: String(versTTC(ht, taux)) });
+/**
+ * Prix d'une pièce du stock sur une ligne : sans réduction, le TTC de la fiche pièce est repris tel quel
+ * (il fait foi) ; avec la réduction professionnelle, elle s'applique sur le HT et le TTC suit.
+ */
+const prixPiece = (catalogueHT: number, catalogueTTC: number | null | undefined, taux: number, tva: number) =>
+  taux === 0 && tva === TVA && catalogueTTC != null && catalogueTTC > 0 ? { prixUnitaireHT: String(versHT(catalogueTTC, tva)), prixTTC: String(catalogueTTC) } : avecHT(appliquerRemisePro(catalogueHT, taux), tva);
 /** Montants d'une ligne de l'éditeur (le TTC unitaire fait foi). */
 const montants = (l: Pick<LigneState, "quantite" | "prixUnitaireHT" | "prixTTC" | "tvaRate">) =>
   montantsLigne({ quantite: num(l.quantite), prixUnitaireHT: num(l.prixUnitaireHT), prixUnitaireTTC: num(l.prixTTC), tvaRate: num(l.tvaRate) });
@@ -132,7 +141,7 @@ const nomClientHit = (c: ClientHit) => (c.type === "PRO" && c.companyName ? c.co
 /** Réduction professionnelle : recalcule les seules lignes « Pièce » du stock dont le prix n'a pas été modifié à la main. */
 function reappliquerRemise(lignes: LigneState[], taux: number): LigneState[] {
   return lignes.map((l) =>
-    l.type === "PIECE" && l.pieceId && l.prixCatalogueHT !== null && !l.prixManuel ? { ...l, ...avecHT(appliquerRemisePro(l.prixCatalogueHT, taux), num(l.tvaRate)) } : l,
+    l.type === "PIECE" && l.pieceId && l.prixCatalogueHT !== null && !l.prixManuel ? { ...l, ...prixPiece(l.prixCatalogueHT, l.prixCatalogueTTC, taux, num(l.tvaRate)) } : l,
   );
 }
 const libelleVehicule = (v: Pick<VehiculeLite, "marque" | "modele" | "immatriculation">) => `${v.marque} ${v.modele} · ${v.immatriculation}`;
@@ -234,10 +243,9 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   }
 
   function ajouterPiece(p: PieceHit | PieceCreee) {
-    const pu = appliquerRemisePro(p.prixVenteHT, remise);
     setLignes((ls) => [
       ...ls,
-      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...avecHT(pu, TVA), tvaRate: String(TVA), pieceId: p.id, stock: p.stock, seuilAlerte: "alerteActive" in p && p.alerteActive === false ? null : (p.seuilAlerte ?? null), prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
+      { key: nouvelleCle(), type: "PIECE", designation: `${p.nom} (${p.reference})`, quantite: "1", ...prixPiece(p.prixVenteHT, p.prixVenteTTC, remise, TVA), prixCatalogueTTC: p.prixVenteTTC ?? null, tvaRate: String(TVA), pieceId: p.id, stock: p.stock, seuilAlerte: "alerteActive" in p && p.alerteActive === false ? null : (p.seuilAlerte ?? null), prixAchatHT: voirMarges ? p.prixAchatHT : undefined, prixCatalogueHT: p.prixVenteHT, prixManuel: false },
     ]);
   }
 
@@ -498,7 +506,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                     {p.referenceCroisee && <span className="block text-xs text-muted-foreground">Équivalent de {p.referenceCroisee}</span>}
                   </span>
                   <span className={p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}>
-                    {formatEUR(versTTC(p.prixVenteHT, TVA))} TTC · stock {p.stock}
+                    {formatEUR(p.prixVenteTTC ?? versTTC(p.prixVenteHT, TVA))} TTC · stock {p.stock}
                     {voirMarges && p.prixAchatHT !== undefined && <span className="block text-xs">Marge {formatMarge(calculerMarge(appliquerRemisePro(p.prixVenteHT, remise), p.prixAchatHT))}</span>}
                   </span>
                 </span>
