@@ -275,7 +275,7 @@ test("11. onglet Campagnes : le Magasin prépare une campagne e-mail", async ({ 
   await d.getByRole("button", { name: "Créer la campagne" }).click();
   await expect(page.getByText("Campagne créée")).toBeVisible();
   await expect(page.getByRole("row", { name: /Pneus hiver/ }).getByText("Brouillon")).toBeVisible();
-  await expect(page.getByText(/clé Brevo manquante/)).toBeVisible();
+  await expect(page.getByText(/pas encore configuré \(Brevo, voir Mon Garage\)/)).toBeVisible();
 });
 
 test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis facture brouillon émise par le Magasin", async ({ page }) => {
@@ -362,6 +362,9 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await page.getByLabel("BIC").fill("PSSTFRPP");
   await page.getByRole("button", { name: "Enregistrer" }).last().click();
   await expect(page.getByText("Coordonnées bancaires enregistrées")).toBeVisible();
+  // Sans variables Brevo : état « non configuré » explicite et test d'envoi désactivé.
+  await expect(page.getByText(/Non configuré : BREVO_API_KEY et BREVO_SENDER_EMAIL manquent/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Envoyer le test" })).toBeDisabled();
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Paramètres" }).click();
   await page.getByLabel("Nouveau point de contrôle").fill("Géométrie");
   await page.getByRole("button", { name: "Ajouter" }).click();

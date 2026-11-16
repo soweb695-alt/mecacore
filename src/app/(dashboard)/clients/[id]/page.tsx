@@ -229,6 +229,7 @@ export default async function FicheClient({ params }: { params: Promise<{ id: st
                     <span>
                       {m.canal === "SMS" ? "SMS" : "E-mail"} · {MODELES[m.template] ?? m.template}
                       {m.statut !== "ENVOYE" && <span className="ml-1.5 text-xs text-warning">({STATUTS_MESSAGE[m.statut]})</span>}
+                      {m.statut === "ECHEC" && m.erreur && <span className="block text-xs text-muted-foreground">{m.erreur}</span>}
                     </span>
                     <span className="text-xs text-muted-foreground">{dateFR(m.envoyeLe)}</span>
                   </div>

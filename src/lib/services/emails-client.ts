@@ -20,7 +20,7 @@ async function variablesGarage() {
 
 /** Une simulation (Brevo non configuré) ou un échec est tracé dans l'historique, puis signalé à l'utilisateur. */
 function verifierResultat(res: ResultatEnvoi) {
-  if (res === "simulation") throw new ApiError(503, "L'envoi d'e-mails n'est pas configuré (clé Brevo manquante). La tentative est notée dans l'historique du client.", "EMAIL_NON_CONFIGURE");
+  if (res === "simulation") throw new ApiError(503, "L'envoi d'e-mails n'est pas configuré (Brevo : voir Mon Garage › Envoi des e-mails). La tentative est notée dans l'historique du client.", "EMAIL_NON_CONFIGURE");
   if (res !== "envoye") throw new ApiError(502, "L'e-mail n'a pas pu être envoyé. Réessayez dans un instant.", "EMAIL_ECHEC");
 }
 

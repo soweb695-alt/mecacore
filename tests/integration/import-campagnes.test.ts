@@ -178,6 +178,7 @@ describe("campagnes", () => {
 
   it("envoie à chaque destinataire une seule fois, avec lien de désinscription et trace dans l'historique", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
     const c = await db.campagne.create({ data: { nom: "P", type: "MANUELLE", template: "campagne", canal: "EMAIL", audience: "TOUS", sujet: "Offre", contenu: "Bonjour {prenom} {nom}, -15 % sur les pneus." } });
@@ -198,6 +199,7 @@ describe("campagnes", () => {
 
   it("une campagne partiellement échouée ne relance que les échecs", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     let appels = 0;
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => ({ ok: ++appels !== 1, status: 500, json: async () => ({}) })));
     const c = await db.campagne.create({ data: { nom: "P", type: "MANUELLE", template: "campagne", canal: "EMAIL", audience: "TOUS", sujet: "Offre", contenu: "Message de la campagne promo." } });

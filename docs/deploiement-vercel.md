@@ -140,7 +140,7 @@ Plus tard, elles se modifient dans : projet Vercel → **Settings** → **Enviro
 | `NEXT_PUBLIC_APP_NAME` | `MecaCore` |
 | `FACTURE_ELECTRONIQUE_PROVIDER` | `mock` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | stockage des fichiers, voir 3.5 |
-| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | facultatif : envoi réel des e-mails (sinon simulés et tracés) |
+| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | facultatif : envoi réel des e-mails (sinon simulés et tracés). Pas à pas : [`brevo.md`](brevo.md) |
 | `SMS_PARTNER_API_KEY`, `SMS_PARTNER_SENDER` | facultatif : envoi réel des SMS |
 
 **Ne pas** ajouter les variables `SEED_*`, `NEON_*` ni `DATABASE_URL` de la base locale.

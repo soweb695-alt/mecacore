@@ -45,6 +45,7 @@ describe("envoi du devis par e-mail", () => {
 
   it("reste « Brouillon » si l'envoi échoue", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     const { id } = await devisPieces(b.p1.id);
     await expect(envoyerDevisParEmail(id)).rejects.toMatchObject({ code: "EMAIL_ECHEC" });
@@ -87,6 +88,7 @@ describe("envoi automatique du BL au passage « Livré »", () => {
 
   it("envoie le PDF (sans prix) au client et trace l'envoi dans son historique", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
     const bl = await blPret();
@@ -109,6 +111,7 @@ describe("envoi automatique du BL au passage « Livré »", () => {
 
   it("le BL passe « Livré » si l'envoi échoue, et peut être renvoyé ensuite", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     const bl = await blPret();
     expect((await marquerLivre(bl.id)).email.resultat).toBe("echec");

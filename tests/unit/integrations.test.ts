@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { envoyerEmailBrevo } from "@/lib/integrations/brevo";
+import { envoyerEmailBrevo, manquesBrevo, verifierCompteBrevo } from "@/lib/integrations/brevo";
 import { getFactureProvider } from "@/lib/integrations/facture-electronique";
 import { envoyerSmsPartner, normaliserTelephone } from "@/lib/integrations/sms-partner";
 import { decoderVin } from "@/lib/integrations/vin";
@@ -23,6 +23,7 @@ describe("Brevo et SMS Partner", () => {
 
   it("appellent l'API REST avec la clé lue dans l'environnement", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "atelier@garage.fr");
     vi.stubEnv("SMS_PARTNER_API_KEY", "cle-sms");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
     vi.stubGlobal("fetch", fetchMock);
@@ -35,6 +36,7 @@ describe("Brevo et SMS Partner", () => {
 
   it("signalent les erreurs sans lever d'exception", async () => {
     vi.stubEnv("BREVO_API_KEY", "k");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "atelier@garage.fr");
     vi.stubEnv("SMS_PARTNER_API_KEY", "k");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("réseau")));
     expect((await envoyerEmailBrevo({ to: "a@b.fr", subject: "s", html: "h" })).ok).toBe(false);
@@ -42,6 +44,34 @@ describe("Brevo et SMS Partner", () => {
     expect(await envoyerSmsPartner({ to: "123", message: "m" })).toMatchObject({ ok: false, erreur: "Numéro de téléphone invalide" });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     expect((await envoyerEmailBrevo({ to: "a@b.fr", subject: "s", html: "h" })).erreur).toContain("500");
+  });
+
+  it("Brevo : expéditeur au nom du garage, réponse vers le garage, étiquette, et adresse d'expédition obligatoire", async () => {
+    vi.stubEnv("BREVO_API_KEY", "cle");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "");
+    expect(manquesBrevo()).toEqual(["BREVO_SENDER_EMAIL"]);
+    expect(await envoyerEmailBrevo({ to: "a@b.fr", subject: "s", html: "h" })).toMatchObject({ ok: false, simulation: true, erreur: expect.stringContaining("BREVO_SENDER_EMAIL") });
+    vi.stubEnv("BREVO_SENDER_EMAIL", "atelier@garage.fr");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ messageId: "x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await envoyerEmailBrevo({ to: "a@b.fr", subject: "s", html: "h", nomExpediteur: "Garage Durand", repondreA: "contact@durand.fr", tag: "vehicule_pret" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      sender: { email: "atelier@garage.fr", name: "Garage Durand" },
+      replyTo: { email: "contact@durand.fr" },
+      tags: ["vehicule_pret"],
+    });
+  });
+
+  it("Brevo : message d'erreur explicite (clé refusée, expéditeur non vérifié) et vérification du compte", async () => {
+    vi.stubEnv("BREVO_API_KEY", "mauvaise");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "atelier@garage.fr");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ code: "unauthorized", message: "Key not found" }) }));
+    expect((await envoyerEmailBrevo({ to: "a@b.fr", subject: "s", html: "h" })).erreur).toBe("Brevo : réponse 401 (clé API invalide) : Key not found");
+    expect(await verifierCompteBrevo()).toEqual({ ok: false, erreur: "Brevo : réponse 401 (clé API invalide) : Key not found" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ email: "patron@durand.fr", companyName: "Garage Durand" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await verifierCompteBrevo()).toEqual({ ok: true, compte: "patron@durand.fr", entreprise: "Garage Durand" });
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.brevo.com/v3/account");
   });
 
   it("normalise les numéros français", () => {

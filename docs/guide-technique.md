@@ -93,7 +93,7 @@ Le prix d'achat est réservé à l'admin et au Magasin (`canSeePurchasePrice`), 
 | Décodage plaque | `lib/integrations/vin.ts` (`decoderPlaque`) | Interface prête (`PLAQUE_DECODER_API_URL` / `PLAQUE_DECODER_API_KEY`) ; aucun fournisseur branché : saisie manuelle. Même format de réponse que le VIN. |
 | Entreprise (SIRET) | `lib/integrations/entreprise.ts` | API publique « Recherche d'entreprises » (data.gouv, sans clé) : raison sociale, SIRET, adresse, n° de TVA (déduit du SIREN si absent). |
 | Décodage VIN | `lib/integrations/vin.ts` | À adapter au contrat exact de l'API VinDecoderVehicle (URL dans `VIN_DECODER_API_URL`, clé dans `VIN_DECODER_API_KEY`). Sans clé ou en cas de délai > 3 s : saisie manuelle. |
-| E-mail | `brevo.ts` | API REST Brevo (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`). Sans clé : simulation tracée. |
+| E-mail | `brevo.ts` | API REST Brevo (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, les deux obligatoires ; sinon simulation tracée). Expéditeur au nom du garage, `replyTo` = e-mail du garage, étiquette = modèle. Erreurs Brevo conservées dans `MessageLog.erreur`. Vérification et e-mail de test : `/api/integrations/email` (Mon Garage). Voir `docs/brevo.md`. |
 | SMS | `sms-partner.ts` | API SMS Partner (`SMS_PARTNER_API_KEY`, `SMS_PARTNER_SENDER`). Sans clé : simulation tracée. |
 | Facture électronique | `facture-electronique.ts` | Interface `FactureElectroniqueProvider` + mock. À brancher quand les identifiants de la PA seront disponibles. Le Factur-X (PDF/A-3 avec XML) n'est pas généré : la PA ou une bibliothèque dédiée s'en chargera. |
 | Stockage | `storage.ts` | S3 compatible (`S3_*`). Sans configuration : dossier local `.storage/` (développement uniquement, à ne pas utiliser en production serverless). |

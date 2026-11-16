@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { configBrevo } from "@/lib/integrations/brevo";
 import { can } from "@/lib/permissions";
 import { compterDestinataires } from "@/lib/services/campagnes";
 import { requirePage } from "@/lib/session";
@@ -22,7 +23,7 @@ export default async function CampagnesPage() {
     db.campagne.findMany({ where: { type: "AUTOMATIQUE" }, orderBy: { joursAvant: "desc" } }),
     compterDestinataires(),
   ]);
-  const brevo = Boolean(process.env.BREVO_API_KEY);
+  const brevo = configBrevo() !== null;
   const edition = can(user, "update", "campagne");
 
   return (
@@ -49,7 +50,7 @@ export default async function CampagnesPage() {
       />
       {!brevo && (
         <p role="note" className="mb-4 rounded-lg bg-warning-bg px-4 py-3 text-sm text-warning">
-          L&apos;envoi d&apos;e-mails n&apos;est pas encore configuré (clé Brevo manquante) : vous pouvez préparer des campagnes, mais pas les envoyer.
+          L&apos;envoi d&apos;e-mails n&apos;est pas encore configuré (Brevo, voir Mon Garage) : vous pouvez préparer des campagnes, mais pas les envoyer.
         </p>
       )}
       <Card className="mb-4">

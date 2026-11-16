@@ -64,3 +64,4 @@ Les mots de passe des comptes initiaux sont lus dans `SEED_ADMIN_PASSWORD`, `SEE
 - [`docs/guide-utilisateur.md`](docs/guide-utilisateur.md) : utilisation au quotidien par rôle
 - [`docs/deploiement-vercel.md`](docs/deploiement-vercel.md) : mise en ligne pas à pas (Neon, GitHub, Vercel)
 - [`docs/neon.md`](docs/neon.md) : créer le compte Neon et connecter la base
+- [`docs/brevo.md`](docs/brevo.md) : connecter Brevo pour l'envoi des e-mails (clé API, expéditeur, test depuis Mon Garage)

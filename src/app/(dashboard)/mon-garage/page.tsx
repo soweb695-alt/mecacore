@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BanqueForm } from "@/components/parametres/banque-form";
+import { BrevoConnexion } from "@/components/parametres/brevo-connexion";
 import { GarageForm } from "@/components/parametres/garage-form";
 import { HorairesForm } from "@/components/parametres/horaires-form";
 import { ModelesEmailForm } from "@/components/parametres/modeles-email-form";
@@ -7,6 +8,7 @@ import { LogoUpload } from "@/components/parametres/logo-upload";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { manquesBrevo } from "@/lib/integrations/brevo";
 import { requirePage } from "@/lib/session";
 import { lireHoraires } from "@/lib/validators/parametres";
 
@@ -51,6 +53,15 @@ export default async function MonGaragePage() {
                 rappelRdv: { sujet: g?.emailRappelRdvSujet ?? "", corps: g?.emailRappelRdvCorps ?? "" },
               }}
             />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Envoi des e-mails (Brevo)</CardTitle>
+            <CardDescription>Devis, bons de livraison, véhicule prêt, rappels et campagnes partent par Brevo. La clé se règle chez l&apos;hébergeur, pas ici.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BrevoConnexion manques={manquesBrevo()} expediteur={process.env.BREVO_SENDER_EMAIL?.trim() || null} emailGarage={g?.email ?? ""} />
           </CardContent>
         </Card>
         <Card>

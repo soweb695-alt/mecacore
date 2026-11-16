@@ -1,9 +1,13 @@
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GET as etatBrevo, POST as testBrevo } from "@/app/api/integrations/email/route";
 import { db } from "@/lib/db";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
 import { envoyerRappelRdv, envoyerVehiculePret } from "@/lib/services/emails-client";
 import { enregistrerRdv } from "@/lib/services/rdv";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
+
+vi.mock("@/lib/session", () => ({ getCurrentUser: async () => ({ id: "admin", role: "ADMIN", email: "a@a.fr", firstName: "A", lastName: "A" }) }));
 
 let b: Awaited<ReturnType<typeof seedBase>>;
 const fetchMock = vi.fn();
@@ -12,6 +16,7 @@ beforeEach(async () => {
   await resetDb();
   b = await seedBase();
   vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+  vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
   fetchMock.mockReset().mockResolvedValue({ ok: true, json: async () => ({}) });
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -62,5 +67,25 @@ describe("e-mail « Rappel RDV »", () => {
     expect(await db.messageLog.count({ where: { template: "rdv_rappel_manuel", clientId: b.client.id } })).toBe(1);
     await db.rendezVous.update({ where: { id }, data: { statut: "ANNULE" } });
     await expect(envoyerRappelRdv(id)).rejects.toMatchObject({ code: "STATUT_INVALIDE" });
+  });
+});
+
+describe("connexion Brevo (Mon Garage)", () => {
+  it("vérifie la clé et envoie un e-mail de test tracé ; l'expéditeur porte le nom du garage", async () => {
+    vi.stubEnv("BREVO_SENDER_EMAIL", "atelier@garage.fr");
+    const ctx = { params: Promise.resolve({}) };
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ email: "patron@garage.fr", companyName: null }) });
+    const { data: etat } = await (await etatBrevo(new NextRequest("http://localhost/api/integrations/email", { headers: { host: "localhost" } }), ctx)).json();
+    expect(etat).toMatchObject({ manques: [], expediteur: "atelier@garage.fr", compte: { ok: true, compte: "patron@garage.fr" } });
+
+    const r = await testBrevo(new NextRequest("http://localhost/api/integrations/email", { method: "POST", headers: { host: "localhost", "content-type": "application/json" }, body: JSON.stringify({ destinataire: "moi@garage.fr" }) }), ctx);
+    expect(r.status).toBe(200);
+    expect(corpsEnvoye()).toMatchObject({ sender: { email: "atelier@garage.fr", name: "Garage Test" }, replyTo: { email: "t@t.fr" }, tags: ["test_email"] });
+    expect(await db.messageLog.count({ where: { template: "test_email", statut: "ENVOYE" } })).toBe(1);
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: "Sender is not valid" }) });
+    const ko = await testBrevo(new NextRequest("http://localhost/api/integrations/email", { method: "POST", headers: { host: "localhost", "content-type": "application/json" }, body: JSON.stringify({ destinataire: "moi@garage.fr" }) }), ctx);
+    expect(ko.status).toBe(502);
+    expect((await ko.json()).error.message).toContain("Sender is not valid");
   });
 });
