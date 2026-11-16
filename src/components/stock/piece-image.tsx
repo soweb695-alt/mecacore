@@ -10,9 +10,9 @@ import { api } from "@/lib/client-api";
 /** URL de l'image d'une pièce, versionnée par sa date d'envoi (cache navigateur longue durée). */
 export const urlImagePiece = (id: string, version: Date | string) => `/api/stock/${id}/image?v=${encodeURIComponent(new Date(version).getTime())}`;
 
-/** Vignette carrée pour les listes ; rien si la pièce n'a pas d'image. */
+/** Vignette carrée pour les listes ; sans image, un espace vide garde les références alignées. */
 export function VignettePiece({ id, version, nom }: { id: string; version: Date | string | null; nom: string }) {
-  if (!version) return <span className="block size-10 shrink-0 rounded-md bg-muted" aria-hidden />;
+  if (!version) return <span className="block size-10 shrink-0" aria-hidden />;
   // eslint-disable-next-line @next/next/no-img-element -- image servie par l'API, déjà au bon format
   return <img src={urlImagePiece(id, version)} alt={nom} loading="lazy" className="size-10 shrink-0 rounded-md border bg-white object-contain" />;
 }

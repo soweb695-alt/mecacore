@@ -103,19 +103,18 @@ test("3. rendez-vous : un créneau en conflit est refusé", async ({ page }) => 
 test("4. le mécanicien n'accède ni aux marges ni aux prix d'achat", async ({ page, request }) => {
   const fond = () => page.evaluate(() => getComputedStyle(document.querySelector("aside")!).backgroundColor);
 
-  // L'admin voit marge et prix d'achat. Thème bleu.
+  // L'admin voit marge et prix d'achat. Même barre latérale pour tous les rôles ; le rôle est affiché en texte.
   await login(page, E2E.admin.email, E2E.admin.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "ADMIN");
+  await expect(page.getByText("Administrateur", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Campagnes" })).toBeVisible();
-  expect(await fond()).toBe("rgb(29, 95, 209)");
+  expect(await fond()).toBe("rgb(255, 255, 255)");
   await page.goto("/stock");
   await expect(page.getByRole("columnheader", { name: "Prix achat HT" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Marge" })).toBeVisible();
   await logout(page);
 
-  // Le magasin (rôle SECRETARIAT) : thème par défaut (barre blanche), prix d'achat visible mais pas la marge.
+  // Le magasin (rôle SECRETARIAT) : prix d'achat visible mais pas la marge.
   await login(page, E2E.secretariat.email, E2E.secretariat.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "SECRETARIAT");
   expect(await fond()).toBe("rgb(255, 255, 255)");
   await expect(page.getByText("Magasin", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Campagnes" })).toBeVisible();
@@ -128,10 +127,9 @@ test("4. le mécanicien n'accède ni aux marges ni aux prix d'achat", async ({ p
   expect(stockSec).not.toMatch(/margePct/);
   await logout(page);
 
-  // L'atelier (rôle MECANICIEN) : thème gris anthracite, navigation réduite, pages et API interdites.
+  // L'atelier (rôle MECANICIEN) : navigation réduite, pages et API interdites.
   await login(page, E2E.mecanicien.email, E2E.mecanicien.password);
-  await expect(page.locator("html")).toHaveAttribute("data-role", "MECANICIEN");
-  expect(await fond()).toBe("rgb(55, 65, 81)");
+  expect(await fond()).toBe("rgb(255, 255, 255)");
   await expect(page.getByText("Atelier", { exact: true }).first()).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   await expect(nav.getByRole("link")).toHaveCount(2);

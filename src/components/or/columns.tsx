@@ -80,7 +80,8 @@ export function colonnesOrdres(magasin: boolean): Colonnes<OrdreRow> {
   ];
 }
 
-export function OrdresTable({ rows, magasin }: { rows: OrdreRow[]; magasin: boolean }) {
+/** `compact` : extrait court (tableau de bord), sans recherche ni pagination. */
+export function OrdresTable({ rows, magasin, compact = false }: { rows: OrdreRow[]; magasin: boolean; compact?: boolean }) {
   const columns = useMemo(() => colonnesOrdres(magasin), [magasin]);
   return (
     <DataTable
@@ -88,7 +89,8 @@ export function OrdresTable({ rows, magasin }: { rows: OrdreRow[]; magasin: bool
       columns={columns}
       data={rows}
       getRowId={(o) => o.id}
-      recherche="Filtrer par n°, véhicule, client…"
+      recherche={compact ? undefined : "Filtrer par n°, véhicule, client…"}
+      sansPagination={compact}
       vide={magasin ? "Aucun ordre de réparation à traiter." : "Aucun ordre de réparation : ils sont créés à la validation d'un devis mécanique."}
     />
   );

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Box, ClipboardCheck, Clock, FileText, Plus, TrendingUp, UserPlus } from "lucide-react";
+import { Plus, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { LABELS, StatusBadge, TONE_ORDRE, TONE_RDV } from "@/components/status-badge";
+import { OrdresTable } from "@/components/or/columns";
+import { LABELS, StatusBadge, TONE_RDV } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
@@ -40,7 +41,7 @@ export default async function DashboardPage() {
       where: { statut: { in: ["EN_ATTENTE_SIGNATURE", "SIGNE", "EN_COURS"] } },
       orderBy: { createdAt: "desc" },
       take: 5,
-      include: { user: { select: { firstName: true } }, devis: { select: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, vehicule: { select: { marque: true, modele: true, immatriculation: true } } } } },
+      include: { user: { select: { firstName: true } }, fiche: { select: { statut: true } }, devis: { select: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, vehicule: { select: { marque: true, modele: true, immatriculation: true } } } } },
     }),
     db.ordreReparation.findMany({
       where: { statut: "A_TRAITER_MAGASIN" },
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        title={`Bonjour, ${user.firstName}`}
+        title="Tableau de bord"
         description={dateLongueFR(dansJours(0))}
         actions={
           <>
@@ -82,34 +83,29 @@ export default async function DashboardPage() {
           </>
         }
       />
-      <div className={cn("mb-4 grid gap-4 sm:grid-cols-2", kpis.length === 4 ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
+      {/* Chiffres du jour en une ligne : la taille et l'espace hiérarchisent, la couleur ne sert qu'aux impayés. */}
+      <dl className="mb-6 flex flex-wrap gap-x-10 gap-y-3 border-b pb-4 text-sm">
         {kpis.map((k) => (
-          <Card key={k.l}>
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">{k.l}</div>
-              <div className="text-[26px] font-semibold leading-tight">{k.v}</div>
-              <div className={cn("flex items-center gap-1 text-xs", k.danger ? "text-destructive" : "text-muted-foreground")}>
-                {k.l.startsWith("Chiffre") && <TrendingUp className="size-3.5 text-success" aria-hidden />}
-                {k.s}
-              </div>
-            </CardContent>
-          </Card>
+          <div key={k.l}>
+            <dt className="text-muted-foreground">{k.l}</dt>
+            <dd className={cn("text-base font-semibold tabular-nums", k.danger && "text-destructive")}>
+              {k.v} <span className={cn("text-xs font-normal", k.danger ? "text-destructive" : "text-muted-foreground")}>{k.s}</span>
+            </dd>
+          </div>
         ))}
-      </div>
+      </dl>
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Alertes</CardTitle>
-            {nbAlertes > 0 && <span className="rounded-full bg-warning-bg px-2 py-0.5 text-xs font-semibold text-warning">{nbAlertes}</span>}
+            <CardTitle>À traiter</CardTitle>
+            {nbAlertes > 0 && <span className="text-sm tabular-nums text-muted-foreground">{nbAlertes}</span>}
           </CardHeader>
           <CardContent className="divide-y">
             {nbAlertes === 0 && <p className="py-3 text-sm text-muted-foreground">Rien à signaler.</p>}
             {fichesATraiter.map((o) => (
               <div key={o.id} className="flex items-center gap-3 py-2.5">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-info-bg text-info">
-                  <ClipboardCheck className="size-4" aria-hidden />
-                </div>
+                <span className="w-16 shrink-0 text-xs text-muted-foreground">Atelier</span>
                 <div className="flex-1">
                   <div className="text-sm font-medium">{o.numero} à traiter par le Magasin</div>
                   <div className="text-xs text-muted-foreground">
@@ -123,9 +119,7 @@ export default async function DashboardPage() {
             ))}
             {alertesStock.map((p) => (
               <div key={p.id} className="flex items-center gap-3 py-2.5">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-warning-bg text-warning">
-                  <Box className="size-4" aria-hidden />
-                </div>
+                <span className="w-16 shrink-0 text-xs text-warning">Stock</span>
                 <div className="flex-1">
                   <div className="text-sm font-medium">{p.nom}</div>
                   <div className="text-xs text-muted-foreground">
@@ -139,9 +133,7 @@ export default async function DashboardPage() {
             ))}
             {impayes.slice(0, 3).map((f) => (
               <div key={f.id} className="flex items-center gap-3 py-2.5">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-danger-bg text-destructive">
-                  <Clock className="size-4" aria-hidden />
-                </div>
+                <span className="w-16 shrink-0 text-xs text-destructive">Impayé</span>
                 <div className="flex-1">
                   <div className="text-sm font-medium">
                     {f.numero} · {nomClient(f.client)}
@@ -157,9 +149,7 @@ export default async function DashboardPage() {
             ))}
             {devisEnvoyes.map((d) => (
               <div key={d.id} className="flex items-center gap-3 py-2.5">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-info-bg text-info">
-                  <FileText className="size-4" aria-hidden />
-                </div>
+                <span className="w-16 shrink-0 text-xs text-muted-foreground">Devis</span>
                 <div className="flex-1">
                   <div className="text-sm font-medium">
                     {d.numero} · {nomClient(d.client)}
@@ -211,38 +201,21 @@ export default async function DashboardPage() {
           </Link>
         </CardHeader>
         <CardContent>
-          {ordres.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucun ordre en cours.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted text-left text-xs text-muted-foreground">
-                  <th className="rounded-l-lg px-3 py-2 font-medium">N°</th>
-                  <th className="px-3 py-2 font-medium">Véhicule</th>
-                  <th className="px-3 py-2 font-medium">Client</th>
-                  <th className="px-3 py-2 font-medium">Technicien</th>
-                  <th className="rounded-r-lg px-3 py-2 font-medium">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordres.map((o) => (
-                  <tr key={o.id} className="border-b last:border-0">
-                    <td className="px-3 py-2.5">
-                      <Link href={`/ordres-reparation/${o.id}`} className="font-medium hover:underline">
-                        {o.numero}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2.5">{o.devis.vehicule ? `${o.devis.vehicule.marque} ${o.devis.vehicule.modele} · ${o.devis.vehicule.immatriculation}` : "–"}</td>
-                    <td className="px-3 py-2.5">{nomClient(o.devis.client)}</td>
-                    <td className="px-3 py-2.5">{o.user?.firstName ?? "Non assigné"}</td>
-                    <td className="px-3 py-2.5">
-                      <StatusBadge tone={TONE_ORDRE[o.statut]}>{LABELS.statutOrdre[o.statut]}</StatusBadge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <OrdresTable
+            compact
+            magasin={false}
+            rows={ordres.map((o) => ({
+              id: o.id,
+              numero: o.numero,
+              vehicule: o.devis.vehicule ? `${o.devis.vehicule.marque} ${o.devis.vehicule.modele} · ${o.devis.vehicule.immatriculation}` : null,
+              client: nomClient(o.devis.client),
+              technicien: o.user?.firstName ?? null,
+              statut: o.statut,
+              fiche: o.fiche ? (o.fiche.statut === "TRANSMISE" || o.fiche.statut === "TRAITEE" ? o.fiche.statut : "EN_COURS") : null,
+              date: o.createdAt.toISOString(),
+              kilometrage: o.kilometrage,
+            }))}
+          />
         </CardContent>
       </Card>
     </>

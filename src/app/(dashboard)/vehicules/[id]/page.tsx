@@ -78,32 +78,28 @@ export default async function FicheVehicule({ params }: { params: Promise<{ id: 
           </>
         }
       />
-      <div className="mb-4 grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="pt-4 text-sm">
-            <div className="text-xs text-muted-foreground">Client associé</div>
+      <dl className="mb-6 flex flex-wrap gap-x-10 gap-y-3 border-b pb-4 text-sm">
+        <div>
+          <dt className="text-muted-foreground">Client associé</dt>
+          <dd className="text-base font-medium">
             {v.client ? (
-              <Link href={`/clients/${v.client.id}`} className="text-base font-medium hover:underline">
+              <Link href={`/clients/${v.client.id}`} className="hover:underline">
                 {nomClient(v.client)}
               </Link>
             ) : (
-              <div className="text-base">Aucun — associez-en un via « Modifier »</div>
+              "Aucun : associez-en un avec « Modifier »"
             )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-sm">
-            <div className="text-xs text-muted-foreground">Kilométrage</div>
-            <div className="text-base font-medium tabular-nums">{v.kilometrage != null ? `${v.kilometrage.toLocaleString("fr-FR")} km` : "–"}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-sm">
-            <div className="text-xs text-muted-foreground">Prochain contrôle technique</div>
-            <div className="text-base font-medium">{v.prochainCT ? dateFR(v.prochainCT) : "–"}</div>
-          </CardContent>
-        </Card>
-      </div>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Kilométrage</dt>
+          <dd className="text-base font-medium tabular-nums">{v.kilometrage != null ? `${v.kilometrage.toLocaleString("fr-FR")} km` : "–"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Prochain contrôle technique</dt>
+          <dd className="text-base font-medium">{v.prochainCT ? dateFR(v.prochainCT) : "–"}</dd>
+        </div>
+      </dl>
 
       {voirDevis && (
         <Card className="mb-4">

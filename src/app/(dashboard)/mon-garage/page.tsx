@@ -17,7 +17,7 @@ export default async function MonGaragePage() {
   const g = await db.parametreGarage.findUnique({ where: { id: 1 } });
   return (
     <>
-      <PageHeader title="Mon Garage" description="Informations imprimées en en-tête et en pied de page des devis, factures et bons de livraison." />
+      <PageHeader title="Mon Garage" description="Coordonnées et mentions légales des PDF, horaires d'ouverture, modèles des e-mails envoyés aux clients, logo et IBAN." />
       <div className="space-y-4">
         <Card>
           <CardHeader>

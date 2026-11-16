@@ -42,12 +42,9 @@ export function Sidebar({ items, user, garage, ouvert, onNavigate }: Props) {
         ouvert ? "translate-x-0" : "-translate-x-full",
       )}
     >
-      {/* Pastille blanche : le logo reste lisible sur la barre bleue (Administrateur) ou anthracite (Atelier). */}
       <div className="px-2 pb-5">
-        <div className="inline-flex rounded-lg bg-white px-2.5 py-1.5 shadow-xs">
-          {/* eslint-disable-next-line @next/next/no-img-element -- logo SVG statique */}
-          <img src="/logo.svg" alt={APP_NAME} className="h-8 w-auto" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- logo SVG statique */}
+        <img src="/logo.svg" alt={APP_NAME} className="h-8 w-auto" />
         <div className="mt-2 truncate text-xs text-sidebar-foreground/80" title={garage}>
           {garage}
         </div>
@@ -77,7 +74,7 @@ export function Sidebar({ items, user, garage, ouvert, onNavigate }: Props) {
                 <Icon className="size-[18px]" aria-hidden />
                 {item.label}
                 {!!item.badge && (
-                  <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold leading-none text-sidebar-primary-foreground" aria-label={`${item.badge} à traiter`}>
+                  <span className="ml-auto text-xs font-semibold tabular-nums text-sidebar-primary" aria-label={`${item.badge} à traiter`}>
                     {item.badge}
                   </span>
                 )}
