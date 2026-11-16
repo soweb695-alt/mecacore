@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { UserPlus } from "lucide-react";
+import { Upload, UserPlus } from "lucide-react";
 import { ClientForm } from "@/components/clients/client-form";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ClientsTable } from "@/components/clients/clients-table";
+import { ImportClients } from "@/components/clients/import-clients";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,7 +37,23 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         title="Clients"
         description={`${res.total} client${res.total > 1 ? "s" : ""} · ${res.pros} professionnel${res.pros > 1 ? "s" : ""}`}
         actions={
-          can(user, "create", "client") && (
+          <>
+          {user.role === "ADMIN" && (
+            <FormDialog
+              title="Importer des clients"
+              description="Depuis l'export « Clients » de Pennylane, ou un fichier Excel / CSV."
+              wide
+              trigger={
+                <Button variant="outline">
+                  <Upload aria-hidden />
+                  Importer
+                </Button>
+              }
+            >
+              <ImportClients />
+            </FormDialog>
+          )}
+          {can(user, "create", "client") && (
             <FormDialog
               title="Nouveau client"
               trigger={
@@ -48,7 +65,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             >
               <ClientForm />
             </FormDialog>
-          )
+          )}
+          </>
         }
       />
       <form method="get" className="mb-4 flex flex-wrap gap-2.5">
