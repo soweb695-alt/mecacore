@@ -102,6 +102,9 @@ describe("image produit (une par pièce, stockée en base)", () => {
     fd.append("image", new File([new Uint8Array(contenu)], "piece.png", { type: "image/png" }));
     return new NextRequest(`http://localhost/api/stock/${id}/image`, { method: "POST", headers: { host: "localhost" }, body: fd });
   };
+  /** Envoi trop gros annoncé par Content-Length (comme un navigateur) : refusé avant toute lecture du corps. */
+  const envoiAnnonce = (id: string, taille: number) =>
+    new NextRequest(`http://localhost/api/stock/${id}/image`, { method: "POST", headers: { host: "localhost", "content-type": "multipart/form-data; boundary=x", "content-length": String(taille) }, body: "x" });
 
   it("enregistre, sert puis retire l'image ; la date d'envoi sert de version", async () => {
     expect((await imagePost(envoi(b.p1.id, PNG), ctx({ id: b.p1.id }))).status).toBe(200);
@@ -121,8 +124,7 @@ describe("image produit (une par pièce, stockée en base)", () => {
   it("refuse un format autre que PNG, JPEG ou WebP, et une image de plus de 2 Mo", async () => {
     const r = await imagePost(envoi(b.p1.id, Buffer.from("GIF89a-pas-une-image")), ctx({ id: b.p1.id }));
     expect((await r.json()).error.code).toBe("FORMAT_INVALIDE");
-    const gros = Buffer.concat([PNG, Buffer.alloc(2_100_000)]);
-    expect((await imagePost(envoi(b.p1.id, gros), ctx({ id: b.p1.id }))).status).toBe(413);
+    expect((await imagePost(envoiAnnonce(b.p1.id, 2_100_000), ctx({ id: b.p1.id }))).status).toBe(413);
   });
 });
 

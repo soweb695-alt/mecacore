@@ -191,8 +191,9 @@ describe("réapprovisionnement automatique", () => {
     await db.piece.update({ where: { id: b.p2.id }, data: { fournisseur: null } });
     const { id } = await creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [ligne(b.p1.id, 4), ligne(b.p2.id, 4)] });
     await validerDevis(id);
-    const bcs = await db.bonCommande.findMany({ orderBy: { fournisseur: "asc" } });
-    expect(bcs.map((x) => x.fournisseur)).toEqual(["Autodis", "À définir"]);
+    // Comparaison indépendante de la collation de la base (« À » trié avant ou après « Au » selon la locale).
+    const bcs = await db.bonCommande.findMany();
+    expect(bcs.map((x) => x.fournisseur).sort()).toEqual(["Autodis", "À définir"].sort());
   });
 
   it("ne commande rien pour une pièce sans seuil d'alerte", async () => {
