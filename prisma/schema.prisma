@@ -185,6 +185,9 @@ model Client {
   creditLimit    Decimal    @default(0) @db.Decimal(10, 2)
   discountRate   Decimal    @default(0) @db.Decimal(5, 2)
   marketingOptIn Boolean    @default(false)
+  /// Identifiant du client dans le logiciel d'origine (ex. Pennylane) : un réimport met à jour la même fiche.
+  /// Conservé après anonymisation pour qu'un réimport ne recrée jamais un client effacé (droit à l'oubli).
+  refExterne     String?    @unique
   isActive       Boolean    @default(true)
   anonymiseLe    DateTime?
   createdAt      DateTime   @default(now())

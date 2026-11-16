@@ -493,3 +493,19 @@ test("17. listes (Data Table) : tri serveur dans l'URL, tri et recherche dans le
   await page.getByLabel("Filtrer ces véhicules…").fill("zzzz-aucun");
   await expect(page.getByText("Aucune ligne ne correspond à cette recherche.")).toBeVisible();
 });
+
+test("18. administrateur : import de clients depuis un export Pennylane (aperçu puis import)", async ({ page }) => {
+  const { CSV_PENNYLANE } = await import("../fixtures/pennylane");
+  await login(page, E2E.admin.email, E2E.admin.password);
+  await page.goto("/clients");
+  await page.getByRole("button", { name: "Importer" }).click();
+  const d = page.getByRole("dialog");
+  await d.getByLabel("Choisir un fichier à importer").setInputFiles({ name: "clients.csv", mimeType: "text/csv", buffer: Buffer.from(CSV_PENNYLANE, "utf-8") });
+  await d.getByRole("button", { name: "Analyser le fichier" }).click();
+  await expect(d.getByText("3 à créer")).toBeVisible();
+  await expect(d.getByText("Nom ou dénomination manquant.")).toBeVisible();
+  await d.getByRole("button", { name: /Importer 3 lignes valides/ }).click();
+  await expect(page.getByText(/3 clients créés/)).toBeVisible();
+  await page.goto("/clients?q=GARAGE%20DU%20PONT");
+  await expect(page.getByRole("link", { name: "GARAGE DU PONT" })).toBeVisible();
+});
