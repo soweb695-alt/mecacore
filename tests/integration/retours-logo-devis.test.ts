@@ -152,6 +152,18 @@ describe("création rapide de pièce", () => {
     expect((await piecePost(req("/api/stock", "POST", { ...corps, reference: "NP2", stock: -1 }), ctx())).status).toBe(400);
     expect((await piecePatch(req(`/api/stock/${p.id}`, "PATCH", { ...corps, stock: -3 }), ctx({ id: p.id }))).status).toBe(200);
   });
+
+  it("le prix TTC saisi fait foi (HT déduit au centime) ; sans TTC, il est calculé depuis le HT ; l'alerte décochée est enregistrée", async () => {
+    courant = sec();
+    const base = { nom: "Disque", prixAchatHT: 10, prixVenteHT: 0, stock: 1, seuilAlerte: 2, referencesCroisees: [] };
+    const r1 = await piecePost(req("/api/stock", "POST", { ...base, reference: "TTC1", prixVenteTTC: 35, alerteActive: false }), ctx());
+    expect((await r1.json()).data).toMatchObject({ prixVenteHT: 29.17, prixVenteTTC: 35, alerteActive: false, enAlerte: false });
+    // 0,09 € TTC n'est pas représentable exactement en HT au centime : le TTC est conservé tel quel.
+    const r2 = await piecePost(req("/api/stock", "POST", { ...base, reference: "TTC2", prixVenteTTC: 0.09 }), ctx());
+    expect((await r2.json()).data).toMatchObject({ prixVenteHT: 0.08, prixVenteTTC: 0.09, alerteActive: true });
+    const r3 = await piecePost(req("/api/stock", "POST", { ...base, reference: "TTC3", prixVenteHT: 29.17 }), ctx());
+    expect((await r3.json()).data).toMatchObject({ prixVenteHT: 29.17, prixVenteTTC: 35 });
+  });
 });
 
 describe("retours & pièces consignées", () => {

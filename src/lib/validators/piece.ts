@@ -9,6 +9,8 @@ export const pieceSchema = z.object({
   categorie: optStr(60),
   prixAchatHT: z.number().min(0, "Prix invalide").max(100000).optional(),
   prixVenteHT: z.number().min(0, "Prix invalide").max(100000),
+  /** Prix de vente TTC (TVA 20 %) : s'il est fourni, il fait foi et le HT en est déduit. */
+  prixVenteTTC: z.number().min(0, "Prix invalide").max(120000).optional(),
   /** Peut être négatif : un devis validé malgré un stock insuffisant laisse des pièces dues. */
   stock: z.number().int("Nombre entier requis").min(-100000, "Stock invalide").max(100000),
   seuilAlerte: z.number().int("Nombre entier requis").min(0).max(100000),

@@ -23,7 +23,7 @@ async function main() {
     });
     await db.tarif.create({ data: { type: "MO2", libelle: "Main d'œuvre niveau 2", montantHT: 65 } });
     await db.pointControle.createMany({ data: ["Freins", "Pneumatiques", "Éclairage"].map((libelle, position) => ({ libelle, position })) });
-    await db.piece.create({ data: { reference: "E2E-PLAQ", nom: "Plaquettes E2E", prixAchatHT: 28.4, prixVenteHT: 50, stock: 5, seuilAlerte: 2 } });
+    await db.piece.create({ data: { reference: "E2E-PLAQ", nom: "Plaquettes E2E", prixAchatHT: 28.4, prixVenteHT: 50, prixVenteTTC: 60, stock: 5, seuilAlerte: 2 } });
   } finally {
     await db.$disconnect();
   }

@@ -421,11 +421,14 @@ test("15. devis : nouvelle pièce créée à la volée, prix TTC, brouillon ; pu
 
   await page.getByRole("button", { name: "Nouvelle pièce" }).click();
   const d = page.getByRole("dialog");
-  await d.getByLabel("Référence").fill("E2E-RAPIDE");
-  await d.getByLabel("Nom").fill("Ampoule H7");
-  await d.getByLabel("Prix d'achat HT (€)").fill("3");
-  await d.getByLabel("Prix de vente HT (€)").fill("10");
-  await d.getByLabel("Stock initial").fill("1");
+  // Même formulaire que le Stock : case d'alerte présente et cochée par défaut, prix HT et TTC synchronisés.
+  await expect(d.getByLabel("Alerter quand le stock atteint le seuil")).toBeChecked();
+  await d.getByLabel("Référence", { exact: true }).fill("E2E-RAPIDE");
+  await d.getByLabel("Désignation").fill("Ampoule H7");
+  await d.getByLabel("Prix achat HT (€)").fill("3");
+  await d.getByLabel("Prix vente HT (€)").fill("10");
+  await expect(d.getByLabel("Prix vente TTC (€)")).toHaveValue("12");
+  await d.getByLabel("Stock", { exact: true }).fill("1");
   await d.getByRole("button", { name: "Créer et ajouter au devis" }).click();
   await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("12");
 
@@ -508,4 +511,39 @@ test("18. administrateur : import de clients depuis un export Pennylane (aperçu
   await expect(page.getByText(/3 clients créés/)).toBeVisible();
   await page.goto("/clients?q=GARAGE%20DU%20PONT");
   await expect(page.getByRole("link", { name: "GARAGE DU PONT" })).toBeVisible();
+});
+
+test("19. stock : prix de vente HT, TTC et marge (€ et %) modifiables et synchronisés ; alerte décochée enregistrée", async ({ page }) => {
+  await login(page, E2E.admin.email, E2E.admin.password);
+  await page.goto("/stock");
+  await page.getByRole("button", { name: /Nouvelle pièce/ }).click();
+  const d = page.getByRole("dialog");
+  await d.getByLabel("Référence", { exact: true }).fill("E2E-SYNC");
+  await d.getByLabel("Désignation").fill("Disque de frein E2E");
+  await d.getByLabel("Prix achat HT (€)").fill("10");
+
+  // TTC saisi → HT et marge recalculés ; 35,00 € TTC reste 35,00 €.
+  await d.getByLabel("Prix vente TTC (€)").fill("35");
+  await expect(d.getByLabel("Prix vente HT (€)")).toHaveValue("29.17");
+  await expect(d.getByLabel("Marge HT (€)")).toHaveValue("19,17");
+  // Marge en % (sur le prix de vente) → HT et TTC recalculés.
+  await d.getByLabel("Marge (% du prix de vente)").fill("50");
+  await expect(d.getByLabel("Prix vente HT (€)")).toHaveValue("20");
+  await expect(d.getByLabel("Prix vente TTC (€)")).toHaveValue("24");
+  // Marge en € → HT et TTC recalculés.
+  await d.getByLabel("Marge HT (€)").fill("5");
+  await expect(d.getByLabel("Prix vente HT (€)")).toHaveValue("15");
+  await expect(d.getByLabel("Prix vente TTC (€)")).toHaveValue("18");
+  await expect(d.getByLabel("Marge (% du prix de vente)")).toHaveValue("33,3");
+  // Prix d'achat modifié : la marge suit, le prix de vente ne bouge pas.
+  await d.getByLabel("Prix achat HT (€)").fill("12");
+  await expect(d.getByLabel("Marge HT (€)")).toHaveValue("3");
+  await expect(d.getByLabel("Prix vente HT (€)")).toHaveValue("15");
+
+  await d.getByLabel("Alerter quand le stock atteint le seuil").uncheck();
+  await d.getByRole("button", { name: "Créer la pièce" }).click();
+  await expect(d).toBeHidden();
+  await page.getByRole("link", { name: "E2E-SYNC" }).first().click();
+  await expect(page.getByText("Vente TTC : 18,00 €")).toBeVisible();
+  await expect(page.getByText("Alerte de seuil désactivée")).toBeVisible();
 });

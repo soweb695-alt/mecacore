@@ -62,6 +62,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
                     categorie: p.categorie,
                     prixAchatHT: p.prixAchatHT,
                     prixVenteHT: p.prixVenteHT,
+                    prixVenteTTC: p.prixVenteTTC,
                     stock: p.stock,
                     seuilAlerte: p.seuilAlerte,
                     alerteActive: p.alerteActive,
@@ -112,6 +113,7 @@ export default async function FichePiece({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>Vente HT : <b>{eur(p.prixVenteHT)}</b></div>
+            <div>Vente TTC : <b>{eur(p.prixVenteTTC)}</b></div>
             {p.prixAchatHT !== undefined && <div>Achat HT : <b>{eur(p.prixAchatHT)}</b></div>}
             {p.margePct !== undefined && <div>Marge : <b>{p.margePct} %</b></div>}
           </CardContent>

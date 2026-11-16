@@ -113,6 +113,33 @@ export function appliquerRemiseGlobale(t: Totaux, r: RemiseGlobale | null | unde
   return { totalHT: fromCents(newHT), totalTVA: fromCents(newTVA), totalTTC: fromCents(newHT + newTVA), montantRemise: fromCents(d), totalHTAvantRemise: t.totalHT };
 }
 
+/** TVA des pièces du stock (taux normal ; une pièce n'a pas de taux propre). */
+export const TVA_PIECE = 20;
+
+/**
+ * Prix de vente d'une pièce : le TTC fait foi (TVA 20 %), le HT en est déduit au centime.
+ * Sans TTC fourni, il est calculé depuis le HT. Un HT saisi est toujours retrouvé à l'identique.
+ */
+export function prixVentePiece(p: { prixVenteHT: number; prixVenteTTC?: number }): { prixVenteHT: number; prixVenteTTC: number } {
+  if (p.prixVenteTTC !== undefined && Number.isFinite(p.prixVenteTTC)) {
+    const ttc = fromCents(toCents(p.prixVenteTTC));
+    return { prixVenteHT: prixHTDepuisTTC(ttc, TVA_PIECE), prixVenteTTC: ttc };
+  }
+  return { prixVenteHT: fromCents(toCents(p.prixVenteHT)), prixVenteTTC: prixTTCDepuisHT(p.prixVenteHT, TVA_PIECE) };
+}
+
+/** Prix de vente HT (au centime) qui donne la marge en € voulue sur le prix d'achat. */
+export const venteHTDepuisMarge = (achatHT: number, margeHT: number): number => fromCents(toCents(achatHT) + toCents(margeHT));
+
+/**
+ * Prix de vente HT (au centime) qui donne le taux de marge voulu, calculé sur le prix de vente (comme `calculerMarge`) :
+ * vente = achat ÷ (1 − taux). Null si le taux est impossible (≥ 100 %) ou sans prix d'achat.
+ */
+export function venteHTDepuisTauxMarge(achatHT: number, pct: number): number | null {
+  if (!Number.isFinite(pct) || pct >= 100 || !(achatHT > 0)) return null;
+  return fromCents(Math.round(toCents(achatHT) / (1 - pct / 100)));
+}
+
 /** Marge sur prix de vente HT : montant (€ HT) et taux sur le prix de vente (%, 1 décimale). */
 export function calculerMarge(venteHT: number, achatHT: number): { montant: number; pct: number } {
   const montant = fromCents(toCents(venteHT) - toCents(achatHT));

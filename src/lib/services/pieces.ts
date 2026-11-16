@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { canSeeMargins, canSeePurchasePrice, type PermissionUser } from "@/lib/permissions";
+import { prixVentePiece } from "@/lib/money";
 import { nn } from "@/lib/validators/common";
 import type { PieceInput } from "@/lib/validators/piece";
 
@@ -18,12 +19,15 @@ export function pieceVue(p: PieceRow, user: PermissionUser) {
   const achatVisible = canSeePurchasePrice(user);
   const vente = Number(p.prixVenteHT);
   const achat = Number(p.prixAchatHT);
-  const { prixAchatHT: _a, prixVenteHT: _v, ...reste } = p;
+  const { prixAchatHT: _a, prixVenteHT: _v, prixVenteTTC: _t, ...reste } = p;
   void _a;
   void _v;
+  void _t;
   return {
     ...reste,
     prixVenteHT: vente,
+    // TTC absent (pièce créée hors application, ex. jeu de démonstration) : calculé depuis le HT.
+    prixVenteTTC: Number(p.prixVenteTTC) > 0 || vente === 0 ? Number(p.prixVenteTTC) : prixVentePiece({ prixVenteHT: vente }).prixVenteTTC,
     ...(achatVisible ? { prixAchatHT: achat } : {}),
     ...(marges ? { margePct: vente > 0 ? Math.round(((vente - achat) / vente) * 100) : 0 } : {}),
     enAlerte: p.alerteActive && p.stock <= p.seuilAlerte,
@@ -39,7 +43,7 @@ export function pieceData(b: PieceInput, user: PermissionUser, creation: boolean
     categorie: nn(b.categorie),
     // Le prix d'achat n'est modifiable que par ceux qui le voient (admin, Magasin).
     ...(canSeePurchasePrice(user) && b.prixAchatHT !== undefined ? { prixAchatHT: b.prixAchatHT } : creation ? { prixAchatHT: 0 } : {}),
-    prixVenteHT: b.prixVenteHT,
+    ...prixVentePiece(b),
     stock: b.stock,
     seuilAlerte: b.seuilAlerte,
     ...(b.alerteActive !== undefined ? { alerteActive: b.alerteActive } : {}),
