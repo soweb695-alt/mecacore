@@ -34,6 +34,10 @@ interface Props<TData extends RowData> {
   triInitial?: SortingState;
   /** Barre d'actions sur la sélection : reçoit les identifiants cochés et une fonction pour vider la sélection. */
   actionsSelection?: (ids: string[], vider: () => void) => ReactNode;
+  /** Lignes cochables (par défaut : toutes). */
+  ligneSelectionnable?: (row: TData) => boolean;
+  /** Message quand aucune ligne n'est cochée. */
+  aideSelection?: string;
   /** Texte du compteur de sélection (ex. « 2 factures sélectionnées »). */
   compteSelection?: (n: number) => string;
   ligneClassName?: (row: TData) => string | undefined;
@@ -45,7 +49,7 @@ interface Props<TData extends RowData> {
  * Data Table (shadcn/ui + TanStack Table v9) utilisé par toutes les listes de l'application.
  * Les colonnes sont définies dans le fichier `columns.tsx` de chaque domaine.
  */
-export function DataTable<TData extends RowData>({ columns, data, getRowId, vide, recherche, taillePage = 25, sansPagination = false, serveur, triInitial = [], actionsSelection, compteSelection = (n) => `${n} ligne${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""}`, ligneClassName, libelle }: Props<TData>) {
+export function DataTable<TData extends RowData>({ columns, data, getRowId, vide, recherche, taillePage = 25, sansPagination = false, serveur, triInitial = [], actionsSelection, ligneSelectionnable, aideSelection = "Cochez des lignes pour agir dessus.", compteSelection = (n) => `${n} ligne${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""}`, ligneClassName, libelle }: Props<TData>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -89,6 +93,7 @@ export function DataTable<TData extends RowData>({ columns, data, getRowId, vide
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
     globalFilterFn: "texte",
+    ...(ligneSelectionnable ? { enableRowSelection: (row: { original: TData }) => ligneSelectionnable(row.original) } : {}),
     enableSortingRemoval: true,
     manualSorting: !!serveur,
     manualPagination: !!serveur,
@@ -113,7 +118,7 @@ export function DataTable<TData extends RowData>({ columns, data, getRowId, vide
           {actionsSelection && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground" aria-live="polite">
-                {selection.length ? compteSelection(selection.length) : "Cochez des lignes pour agir dessus."}
+                {selection.length ? compteSelection(selection.length) : aideSelection}
               </span>
               {actionsSelection(selection, () => setRowSelection({}))}
             </div>

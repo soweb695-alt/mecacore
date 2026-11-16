@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Download } from "lucide-react";
+import { TopPiecesTable } from "@/components/analyse/columns";
 import { PageHeader } from "@/components/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { eur } from "@/lib/format";
 import { analyser, type Periode } from "@/lib/services/analyse";
 import { requirePage } from "@/lib/session";
@@ -47,22 +47,22 @@ export default async function AnalysePage({ searchParams }: { searchParams: Prom
           </>
         }
       />
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Chiffres de la période en une ligne : lus d'un coup d'œil, sans cartes. */}
+      <dl className="mb-6 flex flex-wrap gap-x-10 gap-y-3 border-b pb-4 text-sm">
         {[
-          { l: "Chiffre d'affaires HT", v: eur(a.caHT), s: `${a.nbFactures} facture${a.nbFactures > 1 ? "s" : ""}` },
+          { l: "CA HT", v: eur(a.caHT), s: `${a.nbFactures} facture${a.nbFactures > 1 ? "s" : ""}` },
           { l: "Marge brute", v: eur(a.marge), s: `${a.margePct} % du CA` },
           { l: "Devis validés", v: `${a.tauxValidation} %`, s: `${a.devisValides} sur ${a.devisTotal}` },
           { l: "Panier moyen", v: eur(a.panierMoyen), s: "par facture" },
         ].map((k) => (
-          <Card key={k.l}>
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">{k.l}</div>
-              <div className="text-[26px] font-semibold leading-tight">{k.v}</div>
-              <div className="text-xs text-muted-foreground">{k.s}</div>
-            </CardContent>
-          </Card>
+          <div key={k.l}>
+            <dt className="text-muted-foreground">{k.l}</dt>
+            <dd className="text-base font-semibold tabular-nums">
+              {k.v} <span className="text-xs font-normal text-muted-foreground">{k.s}</span>
+            </dd>
+          </div>
         ))}
-      </div>
+      </dl>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -114,35 +114,7 @@ export default async function AnalysePage({ searchParams }: { searchParams: Prom
           </a>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pièce</TableHead>
-                <TableHead className="text-right">Quantité</TableHead>
-                <TableHead className="text-right">CA HT</TableHead>
-                <TableHead className="text-right">Marge</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {a.topPieces.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
-                    Aucune vente de pièce sur la période.
-                  </TableCell>
-                </TableRow>
-              )}
-              {a.topPieces.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    {p.nom} <span className="text-xs text-muted-foreground">{p.reference}</span>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{p.qte}</TableCell>
-                  <TableCell className="text-right tabular-nums">{eur(p.ca)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{eur(p.marge)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <TopPiecesTable rows={a.topPieces.map((p) => ({ id: p.id, nom: p.nom, reference: p.reference, qte: p.qte, ca: p.ca, marge: p.marge }))} />
         </CardContent>
       </Card>
     </>

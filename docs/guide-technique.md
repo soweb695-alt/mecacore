@@ -25,6 +25,13 @@ tests/                       unit/, integration/ (vraie base PostgreSQL), e2e/ (
 
 Le front lit les données directement côté serveur (composants serveur) et écrit via les routes API (`fetch` depuis des formulaires `react-hook-form` + `zod`).
 
+## Listes (Data Table)
+
+- `components/data-table/data-table-features.ts` : fonctionnalités TanStack Table v9 communes (`tableFeatures()` : filtrage + recherche globale sans accents, tri, sélection, pagination avec `createPaginatedRowModel()`), objet stable au niveau du module.
+- `components/data-table/data-table.tsx` : composant `DataTable` (rendu shadcn/ui `Table`), en-tête triable `EnTete`, colonne de cases `colonneSelection`.
+- Un fichier de colonnes par domaine (`components/<domaine>/columns.tsx`, composants client) ; les pages serveur passent des lignes sérialisables (dates ISO, montants en nombre) et les droits sous forme de booléens. Les colonnes réservées (prix d'achat, marge) ne sont pas créées et leurs valeurs ne sont pas envoyées aux rôles non autorisés.
+- Clients, devis, factures, stock, retours : mode serveur (`manualSorting`, `manualPagination`), état dans l'URL (`?page=&tri=&ordre=`) et colonnes triables limitées par `lib/tri.ts` (`lireTri`). Les autres listes sont traitées dans le navigateur.
+
 ## Rôles et droits
 
 Matrice unique dans `src/lib/permissions.ts`, utilisée par l'API, les pages serveur et la navigation.

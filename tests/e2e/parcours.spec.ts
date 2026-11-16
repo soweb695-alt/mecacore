@@ -475,3 +475,20 @@ test("16. devis : PU HT et PU TTC se mettent à jour l'un l'autre ; 2 × 17,50 �
   await expect(page.getByLabel("Prix unitaire TTC")).toHaveValue("17.5");
   await expect(page.locator("div", { hasText: /^Total TTC/ }).last()).toContainText("35,00");
 });
+
+test("17. listes (Data Table) : tri serveur dans l'URL, tri et recherche dans le navigateur", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/clients");
+  await page.getByRole("columnheader", { name: "Client" }).getByRole("button").click();
+  await expect(page).toHaveURL(/tri=nom&ordre=(asc|desc)/);
+  await expect(page.getByRole("columnheader", { name: "Client" })).toHaveAttribute("aria-sort", /ascending|descending/);
+
+  await page.goto("/vehicules");
+  await page.getByRole("columnheader", { name: "Plaque" }).getByRole("button").click();
+  await expect(page.getByRole("columnheader", { name: "Plaque" })).toHaveAttribute("aria-sort", /ascending|descending/);
+  // Recherche insensible aux accents et à la casse.
+  await page.getByLabel("Filtrer ces véhicules…").fill("leroy");
+  await expect(page.getByRole("row", { name: /Leroy/ }).first()).toBeVisible();
+  await page.getByLabel("Filtrer ces véhicules…").fill("zzzz-aucun");
+  await expect(page.getByText("Aucune ligne ne correspond à cette recherche.")).toBeVisible();
+});

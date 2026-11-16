@@ -1,5 +1,8 @@
 # Guide utilisateur
 
+## Les listes
+Toutes les listes (clients, véhicules, devis, OR, factures, stock, commandes, retours, relances, tarifs, collaborateurs, campagnes) fonctionnent de la même façon : **cliquez sur un en-tête de colonne** pour trier (un second clic inverse l'ordre, un troisième revient à l'ordre par défaut), naviguez avec **Précédent / Suivant**. Les grandes listes (clients, devis, factures, stock, retours) gardent le tri dans l'adresse de la page : un lien copié rouvre la même vue. Les autres listes ont un champ **Filtrer** qui ignore accents et majuscules. Les cases à cocher (factures, bons de livraison) servent aux actions groupées.
+
 ## Se connecter
 
 Ouvrez l'adresse de l'application, saisissez votre e-mail et votre mot de passe. Après 5 erreurs, la connexion est bloquée 15 minutes. En cas d'oubli, demandez à l'administrateur de réinitialiser votre mot de passe (Collaborateurs → Modifier).
