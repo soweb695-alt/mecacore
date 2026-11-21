@@ -32,6 +32,8 @@ export const banqueSchema = z.object({
 
 export const pointControleSchema = z.object({
   libelle: z.string().trim().min(2, "Libellé trop court").max(120),
+  /** Catégorie du modèle (fiche par catégories). */
+  categorieId: z.string().min(1).max(40),
 });
 
 export const pointControleUpdateSchema = z.object({
@@ -41,10 +43,42 @@ export const pointControleUpdateSchema = z.object({
   deplacer: z.enum(["haut", "bas"]).optional(),
 });
 
-export const ficheSaisieSchema = z.object({
-  points: z.array(z.object({ id: z.string().min(1).max(40), resultat: z.enum(["NON_VERIFIE", "OK", "A_SURVEILLER", "DEFAUT"]) })).max(100),
-  remarques: z.string().trim().max(2000),
-  valider: z.boolean(),
+const signaturePng = z.string().max(600_000).regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "Signature invalide");
+
+/** Saisie de la fiche de contrôle par l'atelier ; à la validation, nom, prénom et signature de l'examinant sont exigés. */
+export const ficheSaisieSchema = z
+  .object({
+    points: z.array(z.object({ id: z.string().min(1).max(40), resultat: z.enum(["NON_VERIFIE", "OK", "A_SURVEILLER", "DEFAUT", "ABIME", "NON_CONFORME", "A_REPARER", "NON_CONCERNE"]) })).max(200),
+    remarques: z.string().trim().max(2000),
+    /** Croquis : croix placées sur le schéma du véhicule (fractions 0 à 1). */
+    dommages: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).max(40).optional(),
+    valider: z.boolean(),
+    examinant: z
+      .object({
+        nom: z.string().trim().min(1, "Nom de l'examinant requis").max(60),
+        prenom: z.string().trim().min(1, "Prénom de l'examinant requis").max(60),
+        /** Exigée à la validation seulement (un brouillon garde le nom et le prénom). */
+        signature: signaturePng.optional(),
+      })
+      .optional(),
+  })
+  .refine((v) => !v.valider || v.examinant?.signature, { path: ["examinant"], message: "Nom, prénom et signature de l'examinant sont requis pour valider" });
+
+/** Vérification de la fiche par le responsable (Magasin ou administrateur). */
+export const ficheVerificationSchema = z.object({
+  nom: z.string().trim().min(2, "Nom du responsable requis").max(80),
+  signature: signaturePng,
+});
+
+export const categorieControleSchema = z.object({
+  libelle: z.string().trim().min(2, "Libellé trop court").max(80),
+  typeStatuts: z.enum(["OK_ABIME", "OK_NC", "OK_A_REPARER", "CASE"]),
+});
+export const categorieControleUpdateSchema = z.object({
+  libelle: z.string().trim().min(2, "Libellé trop court").max(80).optional(),
+  typeStatuts: z.enum(["OK_ABIME", "OK_NC", "OK_A_REPARER", "CASE"]).optional(),
+  isActive: z.boolean().optional(),
+  deplacer: z.enum(["haut", "bas"]).optional(),
 });
 
 /** Coordonnées du garage (onglet « Mon Garage ») : reprises dans l'en-tête et le pied de page des PDF. */

@@ -4,7 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /** Zone de signature tactile (souris, doigt ou stylet). Exporte un PNG en data URL. */
-export function SignaturePad({ onSave, pending }: { onSave: (dataUrl: string) => void; pending?: boolean }) {
+export function SignaturePad({
+  onSave,
+  pending,
+  label = "Zone de signature du client",
+  libelleValider = "Valider la signature",
+  hauteur = 240,
+}: {
+  onSave: (dataUrl: string) => void;
+  pending?: boolean;
+  label?: string;
+  libelleValider?: string;
+  /** Hauteur du dessin (largeur fixe 640) : une zone plus basse pour les signatures de la fiche de contrôle. */
+  hauteur?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const dessin = useRef(false);
   const [vide, setVide] = useState(true);
@@ -60,8 +73,8 @@ export function SignaturePad({ onSave, pending }: { onSave: (dataUrl: string) =>
       <canvas
         ref={ref}
         width={640}
-        height={240}
-        aria-label="Zone de signature du client"
+        height={hauteur}
+        aria-label={label}
         className="w-full touch-none rounded-lg border bg-white"
         onPointerDown={debut}
         onPointerMove={trace}
@@ -73,7 +86,7 @@ export function SignaturePad({ onSave, pending }: { onSave: (dataUrl: string) =>
           Effacer
         </Button>
         <Button type="button" disabled={vide || pending} onClick={() => onSave(ref.current!.toDataURL("image/png"))}>
-          Valider la signature
+          {libelleValider}
         </Button>
       </div>
     </div>

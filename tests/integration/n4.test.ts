@@ -12,7 +12,7 @@ import { enregistrerTarif } from "@/lib/services/tarifs";
 import { analyser } from "@/lib/services/analyse";
 import { facturesVersPdf, facturesVersXlsx } from "@/lib/export-factures";
 import { pdfFacture } from "@/lib/pdf/facture";
-import { creneau, ligne, resetDb, seedBase } from "./helpers";
+import { creneau, ligne, resetDb, seedBase, EXAMINANT } from "./helpers";
 
 let b: Awaited<ReturnType<typeof seedBase>>;
 beforeEach(async () => {
@@ -49,7 +49,7 @@ async function orTermine(lignes = [ligne(b.p1.id, 1, 50), MO]) {
   const ordreId = v.ordre!.id;
   await enregistrerSignature(ordreId, PNG);
   const fiche = await obtenirFiche(ordreId);
-  await enregistrerFiche(ordreId, { id: b.meca.id, role: "MECANICIEN" }, { points: fiche.points.map((p) => ({ id: p.id, resultat: "OK" })), remarques: "", valider: true });
+  await enregistrerFiche(ordreId, { id: b.meca.id, role: "MECANICIEN" }, { points: fiche.points.map((p) => ({ id: p.id, resultat: "OK" })), remarques: "", valider: true, examinant: EXAMINANT });
   const { factureId } = await terminerOrdre(ordreId, 81_250);
   return { devisId, ordreId, factureId };
 }

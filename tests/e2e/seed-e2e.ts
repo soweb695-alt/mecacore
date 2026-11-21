@@ -22,7 +22,16 @@ async function main() {
       data: { id: 1, nomGarage: "Garage E2E", adresse: "1 rue du Test, 69000 Lyon", telephone: "04 00 00 00 00", email: "e2e@garage.test", siret: "000 000 000 00000", tvaNumber: "FR00000000000", horaires: {} },
     });
     await db.tarif.create({ data: { type: "MO2", libelle: "Main d'œuvre niveau 2", montantHT: 65 } });
-    await db.pointControle.createMany({ data: ["Freins", "Pneumatiques", "Éclairage"].map((libelle, position) => ({ libelle, position })) });
+    // Modèle de fiche de contrôle par catégories (le même que celui créé par la migration).
+    const modele = [
+      { libelle: "État des pneus", typeStatuts: "OK_ABIME" as const, points: ["Pneu AV/G", "Pneu AV/D", "Pneu AR/G", "Pneu AR/D"] },
+      { libelle: "Contrôle des niveaux", typeStatuts: "OK_NC" as const, points: ["Niveau d'huile", "Niveau d'eau", "Niveau de lave-glace", "Plaquettes de freins", "Carburant"] },
+      { libelle: "Éléments du véhicule", typeStatuts: "OK_A_REPARER" as const, points: ["Phare avant", "Antibrouillard", "Clignotant", "Feu de stop", "Feu de recul", "Vitre avant", "Vitre arrière", "Rétroviseur D", "Rétroviseur G", "Gyrophare de recul", "Fanion"] },
+      { libelle: "Papiers / accessoires de bord", typeStatuts: "CASE" as const, points: ["Carte grise", "Assurance", "Contrôle technique", "Cric", "Roue de secours", "Boîte à pharmacie", "KIT (extincteur, triangle, gilet)"] },
+    ];
+    for (const [i, c] of modele.entries()) {
+      await db.categorieControle.create({ data: { libelle: c.libelle, typeStatuts: c.typeStatuts, position: i, points: { create: c.points.map((libelle, position) => ({ libelle, position })) } } });
+    }
     await db.piece.create({ data: { reference: "E2E-PLAQ", nom: "Plaquettes E2E", prixAchatHT: 28.4, prixVenteHT: 50, prixVenteTTC: 60, stock: 5, seuilAlerte: 2 } });
   } finally {
     await db.$disconnect();

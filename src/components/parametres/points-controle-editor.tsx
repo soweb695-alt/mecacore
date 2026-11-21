@@ -14,8 +14,8 @@ export interface PointModele {
   isActive: boolean;
 }
 
-/** Modèle de la fiche de contrôle : ajout, renommage, ordre, désactivation. N'affecte pas les fiches déjà créées. */
-export function PointsControleEditor({ points }: { points: PointModele[] }) {
+/** Points d'une catégorie du modèle de fiche de contrôle : ajout, renommage, ordre, désactivation. N'affecte pas les fiches déjà créées. */
+export function PointsControleEditor({ points, categorieId }: { points: PointModele[]; categorieId: string }) {
   const router = useRouter();
   const [nouveau, setNouveau] = useState("");
   const [pending, setPending] = useState(false);
@@ -36,7 +36,7 @@ export function PointsControleEditor({ points }: { points: PointModele[] }) {
   return (
     <div className="space-y-3">
       <ul className="divide-y rounded-lg border">
-        {points.length === 0 && <li className="px-3 py-4 text-sm text-muted-foreground">Aucun point : les fiches de contrôle seront vides.</li>}
+        {points.length === 0 && <li className="px-3 py-4 text-sm text-muted-foreground">Aucun point dans cette catégorie.</li>}
         {points.map((p, i) => (
           <li key={p.id} className="flex items-center gap-2 px-3 py-2">
             <Input
@@ -72,7 +72,7 @@ export function PointsControleEditor({ points }: { points: PointModele[] }) {
           const v = nouveau.trim();
           if (v.length < 2) return;
           void agir(async () => {
-            await api("/api/points-controle", "POST", { libelle: v });
+            await api("/api/points-controle", "POST", { libelle: v, categorieId });
             setNouveau("");
           }, "Point ajouté");
         }}

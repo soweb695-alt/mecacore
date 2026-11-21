@@ -34,3 +34,13 @@ export function creneau(mecanicienId: string) {
   const jour = `2027-03-${String(1 + (jourSuivant++ % 27)).padStart(2, "0")}`;
   return { mecanicienId, rdv: { debut: `${jour}T09:00`, fin: `${jour}T10:00` } };
 }
+
+/** Signature PNG 1 × 1 (data URL) : examinant de la fiche de contrôle, signature client de l'OR. */
+export const SIGNATURE_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+export const EXAMINANT = { nom: "Test", prenom: "Meca", signature: SIGNATURE_PNG };
+
+/** Modèle de fiche de contrôle (vidé par resetDb) : une catégorie « Ok / À réparer » de `n` points. */
+export async function modeleFiche(n = 3) {
+  const c = await db.categorieControle.create({ data: { libelle: "Éléments", typeStatuts: "OK_A_REPARER", points: { create: Array.from({ length: n }, (_, i) => ({ libelle: `Point ${i + 1}`, position: i })) } } });
+  return c.id;
+}

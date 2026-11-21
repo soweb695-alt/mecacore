@@ -319,13 +319,34 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
   await expect(page.getByRole("button", { name: "Terminer l'ordre" })).toBeDisabled();
   await expect(page.getByText("Validez d'abord la fiche de contrôle ci-dessous.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Valider et transmettre au Magasin" })).toBeDisabled();
-  const ok = page.getByRole("button", { name: "OK", exact: true });
+  // Fiche par catégories : « Ok » partout, un pneu abîmé, le fanion non concerné, les papiers cochés sauf le cric.
+  const ok = page.getByRole("radio", { name: /: Ok$/ });
   const n = await ok.count();
-  expect(n).toBeGreaterThan(0);
+  expect(n).toBe(20);
   for (let i = 0; i < n; i++) await ok.nth(i).click();
-  await page.getByLabel("Remarques").fill("Pneus avant à surveiller");
+  await page.getByRole("radio", { name: "Pneu AV/G : Abîmé" }).click();
+  await page.getByRole("radio", { name: "Fanion : non concerné" }).click();
+  const papiers = page.getByRole("checkbox", { name: /: Ok$/ });
+  for (let i = 0; i < (await papiers.count()); i++) if (!(await papiers.nth(i).getAttribute("aria-label"))!.startsWith("Cric")) await papiers.nth(i).click();
+  // Croquis : une croix sur l'avant droit.
+  const croquis = page.getByRole("button", { name: /Schéma du véhicule/ });
+  await croquis.scrollIntoViewIfNeeded();
+  const boite = (await croquis.boundingBox())!;
+  await page.mouse.click(boite.x + boite.width * 0.85, boite.y + boite.height * 0.25);
+  await expect(croquis).toHaveAttribute("aria-label", /1 dommage signalé/);
+  await page.getByLabel("Observations").fill("Pneu avant gauche abîmé");
+  // Examinant : nom et prénom pré-remplis, signature au doigt.
+  await expect(page.getByLabel("Nom de l'examinant", { exact: true })).toHaveValue("Amrani");
+  await page.getByLabel("Signature de l'examinant").scrollIntoViewIfNeeded();
+  const zone = (await page.getByLabel("Signature de l'examinant").boundingBox())!;
+  await page.mouse.move(zone.x + 20, zone.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(zone.x + 120, zone.y + 60, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Enregistrer la signature" }).click();
   await page.getByRole("button", { name: "Valider et transmettre au Magasin" }).click();
   await expect(page.getByText("Fiche transmise au Magasin")).toBeVisible();
+  await expect(page.getByAltText("Signature de l'examinant")).toBeVisible();
   await page.getByRole("button", { name: "Terminer l'ordre" }).click();
   const fin = page.getByRole("dialog");
   await expect(fin.getByLabel("Kilométrage au compteur")).toHaveValue("84200");
@@ -342,6 +363,24 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
   await page.goto("/ordres-reparation?vue=magasin");
   await expect(page.getByRole("link", { name: numeroOr })).toBeVisible();
   await expect(page.getByText("84 350 km")).toBeVisible();
+  // Vérification du responsable : signature du Magasin, puis impression de la fiche.
+  await page.getByRole("link", { name: numeroOr }).click();
+  await page.getByLabel("Signature du responsable").scrollIntoViewIfNeeded();
+  const zoneResp = (await page.getByLabel("Signature du responsable").boundingBox())!;
+  await page.mouse.move(zoneResp.x + 20, zoneResp.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(zoneResp.x + 140, zoneResp.y + 50, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Enregistrer la signature" }).click();
+  await page.getByRole("button", { name: "Signer la vérification" }).click();
+  await expect(page.getByText("Fiche vérifiée et signée")).toBeVisible();
+  const fiche = await page.evaluate(async () => {
+    const r = await fetch(`${location.pathname}`.replace("/ordres-reparation/", "/api/ordres-reparation/") + "/fiche/pdf");
+    return { status: r.status, type: r.headers.get("content-type") };
+  });
+  expect(fiche).toEqual({ status: 200, type: "application/pdf" });
+  await expect(page.getByRole("link", { name: "Imprimer la fiche" })).toBeVisible();
+  await page.goto("/ordres-reparation?vue=magasin");
   await page.getByRole("link", { name: "Finaliser la facture" }).click();
   await expect(page.getByRole("heading", { name: /Facture à émettre/ })).toBeVisible();
   await expect(page.getByText("Brouillon", { exact: true }).first()).toBeVisible();
@@ -367,10 +406,14 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await expect(page.getByRole("button", { name: "Envoyer le test" })).toBeDisabled();
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Paramètres" }).click();
   await page.getByRole("link", { name: "Fiche de contrôle" }).click();
-  await page.getByLabel("Nouveau point de contrôle").fill("Géométrie");
-  await page.getByRole("button", { name: "Ajouter" }).click();
+  await page.getByLabel("Nouveau point de contrôle").nth(2).fill("Géométrie");
+  await page.getByRole("button", { name: "Ajouter", exact: true }).nth(2).click();
   await expect(page.getByText("Point ajouté")).toBeVisible();
-  await expect(page.getByLabel(/Libellé du point/).last()).toHaveValue("Géométrie");
+  await expect.poll(async () => page.getByLabel(/Libellé du point/).evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value))).toContain("Géométrie");
+  await page.getByLabel("Nouvelle catégorie de contrôle").fill("Carrosserie");
+  await page.getByLabel("Statuts de la nouvelle catégorie").selectOption("OK_ABIME");
+  await page.getByRole("button", { name: "Ajouter la catégorie" }).click();
+  await expect(page.getByText("Catégorie ajoutée")).toBeVisible();
 
   // Facture manuelle : client, ligne libre, remise de 10 % sur le HT, règlement par virement.
   await page.goto("/factures");
