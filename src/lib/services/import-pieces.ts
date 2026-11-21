@@ -1,4 +1,5 @@
 import "server-only";
+import { categorieCanonique } from "@/lib/services/pieces";
 import { db } from "@/lib/db";
 import { prixVentePiece } from "@/lib/money";
 import { canSeePurchasePrice, type PermissionUser } from "@/lib/permissions";
@@ -76,7 +77,7 @@ export async function importerPieces(user: PermissionUser, rows: string[][], app
             ...(v.nom !== undefined ? { nom: v.nom } : {}),
             ...(v.marque !== undefined ? { marque: v.marque } : {}),
             ...(v.fournisseur !== undefined ? { fournisseur: v.fournisseur } : {}),
-            ...(v.categorie !== undefined ? { categorie: v.categorie } : {}),
+            ...(v.categorie !== undefined ? { categorie: await categorieCanonique(tx, v.categorie) } : {}),
             ...(achatAutorise && v.prixAchatHT !== undefined ? { prixAchatHT: v.prixAchatHT } : {}),
             ...(v.prixVenteHT !== undefined ? prixVentePiece({ prixVenteHT: v.prixVenteHT }) : {}),
             ...(v.seuilAlerte !== undefined ? { seuilAlerte: v.seuilAlerte } : {}),

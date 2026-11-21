@@ -131,3 +131,24 @@ export async function piecesEnAlerte(limit = 5) {
     SELECT id, nom, stock, "seuilAlerte" FROM "Piece"
     WHERE "isActive" = true AND "alerteActive" = true AND stock <= "seuilAlerte" ORDER BY (stock - "seuilAlerte") ASC, nom ASC LIMIT ${limit}`;
 }
+
+const sansAccent = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/**
+ * Catégorie saisie sur une pièce : reprend l'écriture de la liste (« freinage » → « Freinage », « eclairage » → « Éclairage »),
+ * ou ajoute la catégorie à la liste des Paramètres › Stocks & alertes si elle est nouvelle. Vide : null.
+ */
+export async function categorieCanonique(tx: Pick<typeof db, "categoriePiece">, saisie: string | null | undefined): Promise<string | null> {
+  const libelle = saisie?.trim().replace(/\s+/g, " ");
+  if (!libelle) return null;
+  const liste = await tx.categoriePiece.findMany({ select: { libelle: true, position: true } });
+  const existante = liste.find((c) => sansAccent(c.libelle) === sansAccent(libelle));
+  if (existante) return existante.libelle;
+  try {
+    await tx.categoriePiece.create({ data: { libelle, position: Math.max(-1, ...liste.map((c) => c.position)) + 1 } });
+  } catch (e) {
+    // Créée en même temps par un autre enregistrement : la même suffit.
+    if ((e as { code?: string }).code !== "P2002") throw e;
+  }
+  return libelle;
+}

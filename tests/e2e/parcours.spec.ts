@@ -625,7 +625,10 @@ test("20. Paramètres : facturation, modèle d'e-mail avec variable, catégories
   await page.goto("/stock");
   await page.getByRole("button", { name: /Nouvelle pièce/ }).click();
   const d = page.getByRole("dialog");
-  await d.getByLabel("Catégorie").selectOption("Échappement");
+  // Catégorie proposée au fil de la frappe (sans accent ni majuscule).
+  await d.getByLabel("Catégorie").fill("echa");
+  await d.getByRole("option", { name: "Échappement" }).click();
+  await expect(d.getByLabel("Catégorie")).toHaveValue("Échappement");
   await expect(d.getByLabel("Seuil d'alerte")).toHaveValue("5");
   await page.keyboard.press("Escape");
 
