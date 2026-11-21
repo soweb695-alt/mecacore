@@ -37,10 +37,14 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     },
     undefined,
   );
-  const [res, cats] = await Promise.all([
+  const [res, utilisees, liste] = await Promise.all([
     rechercherPieces(user, { q: query.q, categorie: query.categorie, bas: query.bas === "1", page: query.page, orderBy: tri.orderBy }),
     db.piece.findMany({ where: { isActive: true, categorie: { not: null } }, distinct: ["categorie"], select: { categorie: true }, orderBy: { categorie: "asc" } }),
+    db.categoriePiece.findMany({ orderBy: [{ position: "asc" }, { libelle: "asc" }], select: { libelle: true } }),
   ]);
+  // Filtre : catégories des Paramètres › Stocks & alertes, puis celles encore portées par des pièces hors liste.
+  const nomsListe = liste.map((c) => c.libelle);
+  const cats = [...nomsListe, ...utilisees.map((c) => c.categorie!).filter((c) => !nomsListe.includes(c))].map((categorie) => ({ categorie }));
   const marges = canSeeMargins(user);
   const achat = canSeePurchasePrice(user);
   const filtresExport = [sp.q && `&q=${encodeURIComponent(sp.q)}`, sp.categorie && `&categorie=${encodeURIComponent(sp.categorie)}`, sp.bas && "&bas=1"].filter(Boolean).join("");

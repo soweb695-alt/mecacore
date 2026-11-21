@@ -65,6 +65,8 @@ export async function importerPieces(user: PermissionUser, rows: string[][], app
   }
 
   if (appliquer && aAppliquer.length > 0) {
+    // Nouvelle pièce sans seuil dans le fichier : seuil par défaut des Paramètres › Stocks & alertes.
+    const seuilDefaut = (await db.parametreGarage.findUnique({ where: { id: 1 }, select: { seuilAlerteDefaut: true } }))?.seuilAlerteDefaut ?? 0;
     await db.$transaction(
       async (tx) => {
         const touchees: string[] = [];
@@ -85,7 +87,7 @@ export async function importerPieces(user: PermissionUser, rows: string[][], app
             await tx.piece.update({ where: { id: existante.id }, data: { ...commun, isActive: true, ...(v.stock ? { stock: { increment: v.stock } } : {}) } });
             touchees.push(existante.id);
           } else {
-            const p = await tx.piece.create({ data: { reference: v.reference, nom: v.nom!, ...prixVentePiece({ prixVenteHT: v.prixVenteHT! }), ...commun, stock: v.stock ?? 0 }, select: { id: true } });
+            const p = await tx.piece.create({ data: { reference: v.reference, nom: v.nom!, ...prixVentePiece({ prixVenteHT: v.prixVenteHT! }), ...commun, seuilAlerte: v.seuilAlerte ?? seuilDefaut, stock: v.stock ?? 0 }, select: { id: true } });
             touchees.push(p.id);
           }
         }

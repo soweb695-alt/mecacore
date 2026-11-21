@@ -31,6 +31,13 @@ enum StatutDevis {
   REJETE
 }
 
+/// Affichage de la remise professionnelle sur les PDF (devis et factures) ; les totaux ne changent pas.
+enum AffichageRemise {
+  LIGNE
+  TOTAL
+  MASQUER
+}
+
 enum TypeRetour {
   PIECE_DEPOSEE
   CONSIGNE
@@ -230,27 +237,27 @@ model Vehicule {
 }
 
 model Piece {
-  id                 String   @id @default(cuid())
-  reference          String   @unique
+  id                 String    @id @default(cuid())
+  reference          String    @unique
   nom                String
   marque             String?
   fournisseur        String?
   categorie          String?
-  prixAchatHT        Decimal  @default(0) @db.Decimal(10, 2)
-  prixVenteHT        Decimal  @default(0) @db.Decimal(10, 2)
+  prixAchatHT        Decimal   @default(0) @db.Decimal(10, 2)
+  prixVenteHT        Decimal   @default(0) @db.Decimal(10, 2)
   /// Prix de vente TTC (TVA 20 %) : il fait foi, le HT en est déduit au centime.
-  prixVenteTTC       Decimal  @default(0) @db.Decimal(10, 2)
-  stock              Int      @default(0)
-  seuilAlerte        Int      @default(0)
+  prixVenteTTC       Decimal   @default(0) @db.Decimal(10, 2)
+  stock              Int       @default(0)
+  seuilAlerte        Int       @default(0)
   /// Faux : la pièce ne déclenche aucune alerte de seuil (liste, tableau de bord, devis) ni bon de commande automatique.
-  alerteActive       Boolean  @default(true)
+  alerteActive       Boolean   @default(true)
   /// Date du dernier envoi d'image (null : pas d'image). Sert aussi de version pour le cache navigateur.
   imageMaj           DateTime?
   taillePneu         String?
   referencesCroisees String[]
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   lignesDevis     LigneDevis[]
   tarifs          TarifPiece[]
@@ -274,16 +281,16 @@ model PieceImage {
 }
 
 model Devis {
-  id                 String      @id @default(cuid())
-  numero             String      @unique
-  type               TypeDevis   @default(MECANIQUE)
-  clientId           String
-  vehiculeId         String?
-  userId             String
-  statut             StatutDevis @default(BROUILLON)
-  dateCreation       DateTime    @default(now())
-  dateValidite       DateTime
-  remisePro          Decimal     @default(0) @db.Decimal(5, 2)
+  id                   String      @id @default(cuid())
+  numero               String      @unique
+  type                 TypeDevis   @default(MECANIQUE)
+  clientId             String
+  vehiculeId           String?
+  userId               String
+  statut               StatutDevis @default(BROUILLON)
+  dateCreation         DateTime    @default(now())
+  dateValidite         DateTime
+  remisePro            Decimal     @default(0) @db.Decimal(5, 2)
   /// Remise globale (comme sur la facture) : saisie € ou %, base HT ou TTC, montant déduit sur cette base.
   remiseGlobaleType    TypeRemise?
   remiseGlobaleBase    BaseRemise?
@@ -291,15 +298,15 @@ model Devis {
   remiseGlobaleMontant Decimal     @default(0) @db.Decimal(10, 2)
   /// Total HT avant remise globale (null = pas de remise globale).
   totalHTAvantRemise   Decimal?    @db.Decimal(10, 2)
-  kilometrage        Int?
-  totalHT            Decimal     @default(0) @db.Decimal(10, 2)
-  totalTVA           Decimal     @default(0) @db.Decimal(10, 2)
-  totalTTC           Decimal     @default(0) @db.Decimal(10, 2)
-  motifRejet         String?
+  kilometrage          Int?
+  totalHT              Decimal     @default(0) @db.Decimal(10, 2)
+  totalTVA             Decimal     @default(0) @db.Decimal(10, 2)
+  totalTTC             Decimal     @default(0) @db.Decimal(10, 2)
+  motifRejet           String?
   /// Si faux : pas d'alerte de seuil dans l'éditeur ni de bon de commande automatique à la validation.
-  priseEnCompteSeuil Boolean     @default(true)
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  priseEnCompteSeuil   Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   client       Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicule     Vehicule?        @relation(fields: [vehiculeId], references: [id], onDelete: SetNull)
@@ -654,38 +661,49 @@ model Campagne {
 }
 
 model ParametreGarage {
-  id                   Int       @id @default(1)
-  nomGarage            String
-  adresse              String
-  telephone            String
-  email                String
-  siret                String
-  tvaNumber            String
-  horaires             Json
-  prefixDevis          String    @default("DEV")
-  prefixFacture        String    @default("FAC")
-  prefixOrdre          String    @default("OR")
-  prefixBonCommande    String    @default("BC")
-  prefixBonLivraison   String    @default("BL")
-  retentionClientsAns  Int       @default(5)
-  retentionMessagesAns Int       @default(3)
+  id                     Int             @id @default(1)
+  nomGarage              String
+  adresse                String
+  telephone              String
+  email                  String
+  siret                  String
+  tvaNumber              String
+  horaires               Json
+  prefixDevis            String          @default("DEV")
+  prefixFacture          String          @default("FAC")
+  prefixOrdre            String          @default("OR")
+  prefixBonCommande      String          @default("BC")
+  prefixBonLivraison     String          @default("BL")
+  retentionClientsAns    Int             @default(5)
+  retentionMessagesAns   Int             @default(3)
   /// Mentions légales imprimées en pied de page des PDF (ex. « SARL au capital de 10 000 € · RCS Lyon 123 456 789 »).
-  formeJuridique       String?
-  capitalSocial        String?
-  rcs                  String?
+  formeJuridique         String?
+  capitalSocial          String?
+  rcs                    String?
   /// Modèles d'e-mails modifiables dans « Mon Garage » (vide : texte par défaut).
   emailVehiculePretSujet String?
   emailVehiculePretCorps String?
   emailRappelRdvSujet    String?
   emailRappelRdvCorps    String?
-  iban                 String?
-  bic                  String?
+  iban                   String?
+  bic                    String?
+  /// Paramètres › Facturation : modes de paiement proposés, délai de paiement des nouveaux clients,
+  /// mentions légales des factures (vide : texte par défaut) et affichage des remises sur les PDF.
+  modesPaiement          ModePaiement[]  @default([CB, ESPECES, CHEQUE, VIREMENT, PLUSIEURS_FOIS])
+  delaiPaiementDefaut    Int             @default(30)
+  mentionsFacture        String?
+  affichageRemise        AffichageRemise @default(LIGNE)
+  /// Paramètres › Communication : expéditeur des e-mails (vide : nom du garage / adresse de l'hébergeur).
+  expediteurNom          String?
+  expediteurEmail        String?
+  /// Paramètres › Stocks : seuil d'alerte proposé pour une nouvelle pièce.
+  seuilAlerteDefaut      Int             @default(5)
   /// Ancienne clé de stockage du logo (S3 / disque). Remplacée par `logoData`, gardée pour les logos déjà envoyés.
-  logoUrl              String?
+  logoUrl                String?
   /// Logo (PNG ou JPEG, 1 Mo max) stocké en base : fonctionne sans stockage S3 (disque en lecture seule sur Vercel).
-  logoData             Bytes?
-  logoMime             String?
-  logoMaj              DateTime?
+  logoData               Bytes?
+  logoMime               String?
+  logoMaj                DateTime?
 }
 
 model Compteur {
@@ -774,4 +792,11 @@ model RetourPiece {
   @@index([type])
   @@index([clientId])
   @@index([ordreId])
+}
+
+/// Catégories de pièces proposées dans la fiche pièce (Paramètres › Stocks & alertes).
+model CategoriePiece {
+  id       String @id @default(cuid())
+  libelle  String @unique
+  position Int    @default(0)
 }

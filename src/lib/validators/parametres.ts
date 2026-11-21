@@ -86,3 +86,65 @@ const modeleEmail = z.object({ sujet: z.string().max(150, "150 caractères maxim
 /** Modèles d'e-mails modifiables (« Mon Garage »). */
 export const modelesEmailSchema = z.object({ vehiculePret: modeleEmail, rappelRdv: modeleEmail });
 export type ModelesEmailInput = z.infer<typeof modelesEmailSchema>;
+
+// ---------- Paramètres › Facturation ----------
+
+export const MODES_PAIEMENT = ["CB", "ESPECES", "CHEQUE", "VIREMENT", "PLUSIEURS_FOIS"] as const;
+export type ModePaiementCle = (typeof MODES_PAIEMENT)[number];
+export const LIBELLES_MODE: Record<ModePaiementCle, string> = { CB: "Carte bancaire", ESPECES: "Espèces", CHEQUE: "Chèque", VIREMENT: "Virement", PLUSIEURS_FOIS: "Paiement en plusieurs fois" };
+
+/** Délais de paiement proposés (jours) ; 0 = paiement immédiat. */
+export const DELAIS_PAIEMENT = [0, 15, 30, 45] as const;
+export const libelleDelai = (j: number) => (j === 0 ? "Paiement immédiat" : `${j} jours`);
+
+export const AFFICHAGES_REMISE = ["LIGNE", "TOTAL", "MASQUER"] as const;
+export type AffichageRemiseCle = (typeof AFFICHAGES_REMISE)[number];
+export const LIBELLES_AFFICHAGE_REMISE: Record<AffichageRemiseCle, string> = {
+  LIGNE: "Afficher sur chaque ligne",
+  TOTAL: "Afficher uniquement dans le total",
+  MASQUER: "Masquer complètement",
+};
+
+/** Mentions imprimées sur les factures tant que le garage n'a pas saisi les siennes. */
+export const MENTIONS_FACTURE_DEFAUT =
+  "En cas de retard de paiement, une indemnité forfaitaire de 40 € pour frais de recouvrement sera exigible (art. L441-10 du Code de commerce), ainsi que des pénalités au taux de trois fois le taux d'intérêt légal. Pas d'escompte pour paiement anticipé.";
+
+const prefixe = (nom: string) =>
+  z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{1,10}$/, `Préfixe ${nom} : 1 à 10 lettres ou chiffres, sans espace`);
+
+export const facturationSchema = z
+  .object({
+    modesPaiement: z.array(z.enum(MODES_PAIEMENT)).min(1, "Cochez au moins un mode de paiement").max(MODES_PAIEMENT.length),
+    delaiPaiementDefaut: z.number().int().refine((v) => (DELAIS_PAIEMENT as readonly number[]).includes(v), "Délai de paiement invalide"),
+    prefixDevis: prefixe("devis"),
+    prefixFacture: prefixe("facture"),
+    prefixBonLivraison: prefixe("bon de livraison"),
+    mentionsFacture: z.string().trim().max(3000, "3 000 caractères maximum"),
+    affichageRemise: z.enum(AFFICHAGES_REMISE),
+  })
+  .refine((v) => new Set([v.prefixDevis, v.prefixFacture, v.prefixBonLivraison]).size === 3, { path: ["prefixFacture"], message: "Les trois préfixes doivent être différents" });
+export type FacturationInput = z.infer<typeof facturationSchema>;
+
+// ---------- Paramètres › Communication ----------
+
+export const communicationSchema = modelesEmailSchema.extend({
+  expediteurNom: z.string().trim().max(70, "70 caractères maximum"),
+  expediteurEmail: z.union([z.literal(""), z.string().trim().toLowerCase().email("Adresse e-mail invalide").max(120)]),
+});
+export type CommunicationInput = z.infer<typeof communicationSchema>;
+
+// ---------- Paramètres › Stocks & alertes ----------
+
+export const stockParametresSchema = z.object({
+  seuilAlerteDefaut: z.number().int("Nombre entier requis").min(0, "Seuil invalide").max(100000),
+});
+
+export const categorieSchema = z.object({ libelle: z.string().trim().min(2, "Libellé trop court").max(60, "60 caractères maximum") });
+export const categorieUpdateSchema = z.object({
+  libelle: z.string().trim().min(2, "Libellé trop court").max(60, "60 caractères maximum").optional(),
+  deplacer: z.enum(["haut", "bas"]).optional(),
+});

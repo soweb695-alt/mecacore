@@ -8,23 +8,52 @@ export interface ModeleEmail {
   corps: string;
 }
 
-/** Variables utilisables dans les modèles (remplacées à l'envoi). */
-export const VARIABLES: Record<CleModele, string[]> = {
-  vehiculePret: ["client", "vehicule", "immatriculation", "garage", "adresse", "telephone", "horaires"],
-  rappelRdv: ["client", "vehicule", "immatriculation", "date", "heure", "garage", "adresse", "telephone", "horaires"],
+/** Variable insérable dans un modèle, avec son libellé (boutons d'insertion des Paramètres). */
+export interface VariableModele {
+  nom: string;
+  libelle: string;
+}
+
+const VARS_COMMUNES: VariableModele[] = [
+  { nom: "client_nom", libelle: "Nom du client" },
+  { nom: "vehicule", libelle: "Véhicule" },
+  { nom: "immatriculation", libelle: "Immatriculation" },
+  { nom: "garage_nom", libelle: "Nom du garage" },
+  { nom: "garage_adresse", libelle: "Adresse du garage" },
+  { nom: "garage_telephone", libelle: "Téléphone du garage" },
+  { nom: "horaires", libelle: "Horaires" },
+];
+
+/** Variables utilisables dans chaque modèle, écrites {{nom}} (remplacées à l'envoi). */
+export const VARIABLES: Record<CleModele, VariableModele[]> = {
+  vehiculePret: VARS_COMMUNES,
+  rappelRdv: [...VARS_COMMUNES.slice(0, 3), { nom: "date_rdv", libelle: "Date du RDV" }, { nom: "heure_rdv", libelle: "Heure du RDV" }, ...VARS_COMMUNES.slice(3)],
 };
 
-/** Textes par défaut, utilisés tant que le garage n'a pas personnalisé ses modèles dans « Mon Garage ». */
+/** Anciens noms ({client}, {date}…) : les modèles saisis avant les Paramètres › Communication restent valides. */
+const ALIAS: Record<string, string> = {
+  client: "client_nom",
+  garage: "garage_nom",
+  adresse: "garage_adresse",
+  telephone: "garage_telephone",
+  date: "date_rdv",
+  heure: "heure_rdv",
+  vehicule: "vehicule",
+  immatriculation: "immatriculation",
+  horaires: "horaires",
+};
+
+/** Textes par défaut, utilisés tant que le garage n'a pas personnalisé ses modèles (Paramètres › Communication). */
 export const MODELES_DEFAUT: Record<CleModele, ModeleEmail> = {
   vehiculePret: {
-    sujet: "Votre {vehicule} ({immatriculation}) est prêt",
+    sujet: "Votre {{vehicule}} ({{immatriculation}}) est prêt",
     corps:
-      "Bonjour {client},\n\nLes travaux sur votre {vehicule} ({immatriculation}) sont terminés : vous pouvez venir le récupérer.\n\nNos horaires :\n{horaires}\n\nÀ bientôt,\n{garage}\n{adresse} · {telephone}",
+      "Bonjour {{client_nom}},\n\nLes travaux sur votre {{vehicule}} ({{immatriculation}}) sont terminés : vous pouvez venir le récupérer.\n\nNos horaires :\n{{horaires}}\n\nÀ bientôt,\n{{garage_nom}}\n{{garage_adresse}} · {{garage_telephone}}",
   },
   rappelRdv: {
-    sujet: "Rappel : rendez-vous le {date} à {heure}",
+    sujet: "Rappel : rendez-vous le {{date_rdv}} à {{heure_rdv}}",
     corps:
-      "Bonjour {client},\n\nNous vous rappelons votre rendez-vous au garage le {date} à {heure} pour votre {vehicule} ({immatriculation}).\n\nPour le déplacer, appelez-nous au {telephone}.\n\nÀ bientôt,\n{garage}\n{adresse}",
+      "Bonjour {{client_nom}},\n\nNous vous rappelons votre rendez-vous au garage le {{date_rdv}} à {{heure_rdv}} pour votre {{vehicule}} ({{immatriculation}}).\n\nPour le déplacer, appelez-nous au {{garage_telephone}}.\n\nÀ bientôt,\n{{garage_nom}}\n{{garage_adresse}}",
   },
 };
 
@@ -33,8 +62,12 @@ export function modele(cle: CleModele, perso: { sujet?: string | null; corps?: s
   return { sujet: perso.sujet?.trim() || MODELES_DEFAUT[cle].sujet, corps: perso.corps?.trim() || MODELES_DEFAUT[cle].corps };
 }
 
+/** Remplace {{nom}} (et l'ancienne forme {nom}) ; une variable inconnue est laissée telle quelle. */
 const remplacer = (texte: string, vars: Record<string, string>, f: (v: string) => string) =>
-  texte.replace(/\{(\w+)\}/g, (m, nom: string) => (nom in vars ? f(vars[nom]) : m));
+  texte.replace(/\{\{\s*(\w+)\s*\}\}|\{(\w+)\}/g, (m, double: string | undefined, simple: string | undefined) => {
+    const nom = double ?? ALIAS[simple!] ?? simple!;
+    return nom in vars ? f(vars[nom]) : m;
+  });
 
 /** Sujet en texte brut, corps en HTML : les valeurs et le texte saisi sont échappés, les retours à la ligne conservés. */
 export function rendreModele(m: ModeleEmail, vars: Record<string, string>): { subject: string; html: string } {

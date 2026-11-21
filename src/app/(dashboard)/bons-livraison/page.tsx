@@ -12,10 +12,11 @@ import { nomClient } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { requirePage } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Commandes et livraisons" };
+export const metadata: Metadata = { title: "Livraisons et commandes" };
 
 export default async function BonsPage() {
   const user = await requirePage("read", "bonCommande");
+  // Bons de livraison d'abord (affichés en premier), puis bons de commande.
   const [bcs, bls] = await Promise.all([
     db.bonCommande.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { lignes: { include: { piece: { select: { reference: true, nom: true } } } } } }),
     db.bonLivraison.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, devis: { select: { id: true, numero: true } }, facture: { select: { id: true, numero: true } }, lignes: true } }),
@@ -24,33 +25,8 @@ export default async function BonsPage() {
 
   return (
     <>
-      <PageHeader title="Commandes et livraisons" description="Commandes aux fournisseurs, réception en stock et bons de livraison clients. Aucune commande n'est passée automatiquement." />
+      <PageHeader title="Livraisons et commandes" description="Bons de livraison clients, puis commandes aux fournisseurs et réception en stock. Aucune commande n'est passée automatiquement." />
       <div className="space-y-6">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Bons de commande</CardTitle>
-            {can(user, "create", "bonCommande") && (
-              <FormDialog title="Nouveau bon de commande" trigger={<Button size="sm"><Plus aria-hidden />Nouveau</Button>}>
-                <BonCommandeForm />
-              </FormDialog>
-            )}
-          </CardHeader>
-          <CardContent>
-            <BonsCommandeTable
-              edit={edit}
-              rows={bcs.map((b) => ({
-                id: b.id,
-                numero: b.numero,
-                automatique: b.automatique,
-                fournisseur: b.fournisseur,
-                date: b.createdAt.toISOString(),
-                statut: b.statut,
-                lignes: b.lignes.map((l) => ({ id: l.id, pieceId: l.pieceId, reference: l.piece.reference, nom: l.piece.nom, quantite: l.quantite, quantiteRecue: l.quantiteRecue })),
-              }))}
-            />
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Bons de livraison <span className="text-xs font-normal text-muted-foreground">({bls.filter((b) => b.statut === "EN_ATTENTE").length} en attente · {bls.filter((b) => b.statut === "PRETE").length} à retirer)</span></CardTitle>
@@ -74,6 +50,31 @@ export default async function BonsPage() {
                 pieces: b.lignes.map((l) => `${l.designation || "Pièce"} × ${l.quantite}`).join(", "),
                 date: b.dateLivraison.toISOString(),
                 statut: b.statut,
+              }))}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Bons de commande</CardTitle>
+            {can(user, "create", "bonCommande") && (
+              <FormDialog title="Nouveau bon de commande" trigger={<Button size="sm"><Plus aria-hidden />Nouveau</Button>}>
+                <BonCommandeForm />
+              </FormDialog>
+            )}
+          </CardHeader>
+          <CardContent>
+            <BonsCommandeTable
+              edit={edit}
+              rows={bcs.map((b) => ({
+                id: b.id,
+                numero: b.numero,
+                automatique: b.automatique,
+                fournisseur: b.fournisseur,
+                date: b.createdAt.toISOString(),
+                statut: b.statut,
+                lignes: b.lignes.map((l) => ({ id: l.id, pieceId: l.pieceId, reference: l.piece.reference, nom: l.piece.nom, quantite: l.quantite, quantiteRecue: l.quantiteRecue })),
               }))}
             />
           </CardContent>

@@ -34,7 +34,7 @@ export function PointsControleEditor({ points }: { points: PointModele[] }) {
   }
 
   return (
-    <div className="max-w-xl space-y-3">
+    <div className="space-y-3">
       <ul className="divide-y rounded-lg border">
         {points.length === 0 && <li className="px-3 py-4 text-sm text-muted-foreground">Aucun point : les fiches de contrôle seront vides.</li>}
         {points.map((p, i) => (

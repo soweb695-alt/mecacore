@@ -8,16 +8,19 @@ export interface EnvoiResultat {
 
 const API = "https://api.brevo.com/v3";
 
-/** Configuration lue dans l'environnement : clé API et adresse d'expédition (vérifiée dans Brevo). */
-export function configBrevo(): { cle: string; expediteur: string } | null {
+/**
+ * Configuration : clé API (environnement) et adresse d'expédition, qui doit être validée dans Brevo.
+ * L'adresse saisie dans Paramètres › Communication (`expediteurParametre`) remplace BREVO_SENDER_EMAIL.
+ */
+export function configBrevo(expediteurParametre?: string | null): { cle: string; expediteur: string } | null {
   const cle = process.env.BREVO_API_KEY?.trim();
-  const expediteur = process.env.BREVO_SENDER_EMAIL?.trim();
+  const expediteur = expediteurParametre?.trim() || process.env.BREVO_SENDER_EMAIL?.trim();
   return cle && expediteur ? { cle, expediteur } : null;
 }
 
 /** Ce qui manque pour envoyer (affiché dans « Mon Garage ») ; tableau vide si tout est configuré. */
-export function manquesBrevo(): string[] {
-  return [!process.env.BREVO_API_KEY?.trim() && "BREVO_API_KEY", !process.env.BREVO_SENDER_EMAIL?.trim() && "BREVO_SENDER_EMAIL"].filter((x): x is string => !!x);
+export function manquesBrevo(expediteurParametre?: string | null): string[] {
+  return [!process.env.BREVO_API_KEY?.trim() && "BREVO_API_KEY", !(expediteurParametre?.trim() || process.env.BREVO_SENDER_EMAIL?.trim()) && "BREVO_SENDER_EMAIL"].filter((x): x is string => !!x);
 }
 
 /** Message d'erreur de Brevo (« Key not found », « sender not valid »…) : utile au diagnostic, sans donnée sensible. */
@@ -35,7 +38,7 @@ async function erreurBrevo(res: Response): Promise<string> {
 
 /**
  * E-mail transactionnel via l'API REST Brevo. Sans clé ou sans adresse d'expédition : mode simulation (rien n'est envoyé).
- * Expéditeur : adresse BREVO_SENDER_EMAIL avec le nom du garage ; les réponses du client vont à `repondreA` (e-mail du garage).
+ * Expéditeur : `expediteur` (Paramètres › Communication) ou BREVO_SENDER_EMAIL, avec `nomExpediteur` ; les réponses vont à `repondreA`.
  */
 export async function envoyerEmailBrevo(opts: {
   to: string;
@@ -43,15 +46,17 @@ export async function envoyerEmailBrevo(opts: {
   html: string;
   attachments?: { name: string; content: Buffer }[];
   headers?: Record<string, string>;
-  /** Nom affiché de l'expéditeur (nom du garage). */
+  /** Nom affiché de l'expéditeur (Paramètres › Communication, sinon nom du garage). */
   nomExpediteur?: string;
+  /** Adresse d'expédition (Paramètres › Communication) ; vide : BREVO_SENDER_EMAIL. Doit être validée dans Brevo. */
+  expediteur?: string | null;
   /** Adresse de réponse (e-mail du garage). */
   repondreA?: string;
   /** Étiquette Brevo (statistiques par type d'e-mail). */
   tag?: string;
 }): Promise<EnvoiResultat> {
-  const config = configBrevo();
-  if (!config) return { ok: false, simulation: true, erreur: `Brevo non configuré (manque ${manquesBrevo().join(" et ")}) : mode simulation` };
+  const config = configBrevo(opts.expediteur);
+  if (!config) return { ok: false, simulation: true, erreur: `Brevo non configuré (manque ${manquesBrevo(opts.expediteur).join(" et ")}) : mode simulation` };
   try {
     const res = await fetch(`${API}/smtp/email`, {
       method: "POST",

@@ -1,8 +1,10 @@
 "use client";
 
 import { Field } from "@/components/forms/field";
+import { useModesPaiement } from "@/components/parametres-context";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
+import { LIBELLES_MODE } from "@/lib/validators/parametres";
 import { appliquerRemiseGlobale, formatEUR, type RemiseGlobale, type Totaux } from "@/lib/money";
 
 export interface OptionsFactureState {
@@ -45,6 +47,7 @@ export function apercu(totaux: Totaux, o: OptionsFactureState): { totaux: Totaux
 /** Remise globale (€ ou %, sur HT ou TTC) et mode de règlement : communs à toute création de facture. */
 export function OptionsFactureFields({ value, onChange, totaux, sansMode = false, idPrefix = "remise" }: { value: OptionsFactureState; onChange: (v: OptionsFactureState) => void; totaux?: Totaux; sansMode?: boolean; idPrefix?: string }) {
   const set = (p: Partial<OptionsFactureState>) => onChange({ ...value, ...p });
+  const modes = useModesPaiement(value.mode);
   const a = totaux ? apercu(totaux, value) : null;
   return (
     <div className="space-y-3">
@@ -74,11 +77,11 @@ export function OptionsFactureFields({ value, onChange, totaux, sansMode = false
       <Field label="Mode de règlement prévu" htmlFor="mode-paiement" hint="« Virement » ajoute l'IBAN et le BIC du garage sur le PDF.">
         <NativeSelect id="mode-paiement" value={value.mode} onChange={(e) => set({ mode: e.target.value as OptionsFactureState["mode"] })}>
           <option value="">Non précisé</option>
-          <option value="CB">Carte bancaire</option>
-          <option value="ESPECES">Espèces</option>
-          <option value="CHEQUE">Chèque</option>
-          <option value="VIREMENT">Virement</option>
-          <option value="PLUSIEURS_FOIS">Paiement en plusieurs fois</option>
+          {modes.map((m) => (
+            <option key={m} value={m}>
+              {LIBELLES_MODE[m]}
+            </option>
+          ))}
         </NativeSelect>
       </Field>
       )}

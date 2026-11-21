@@ -416,6 +416,9 @@ export async function enregistrerPaiement(factureId: string, p: PaiementInput) {
     if (!f) throw new ApiError(404, "Facture introuvable", "INTROUVABLE");
     if (f.statut === "ANNULEE") throw new ApiError(409, "Cette facture est annulée", "STATUT_INVALIDE");
     if (f.statut === "BROUILLON") throw new ApiError(409, "Émettez la facture avant d'enregistrer un paiement", "STATUT_INVALIDE");
+    // Modes de paiement acceptés (Paramètres › Facturation).
+    const params = await tx.parametreGarage.findUnique({ where: { id: 1 }, select: { modesPaiement: true } });
+    if (params && !params.modesPaiement.includes(p.mode)) throw new ApiError(400, "Ce mode de paiement n'est pas accepté (Paramètres › Facturation)", "MODE_NON_ACCEPTE");
 
     const total = Number(f.totalTTC);
     const deja = Number(f.montantPaye);

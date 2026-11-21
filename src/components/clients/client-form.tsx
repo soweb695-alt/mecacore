@@ -11,6 +11,7 @@ import { SubmitButton, useCloseDialog } from "@/components/forms/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
+import { useParametres } from "@/components/parametres-context";
 import { api } from "@/lib/client-api";
 import { clientSchema, type ClientInput } from "@/lib/validators/client";
 
@@ -50,6 +51,7 @@ export function ClientForm({
   const router = useRouter();
   const closeDialog = useCloseDialog();
   const annuler = onCancel ?? closeDialog;
+  const { delaiPaiementDefaut } = useParametres();
   const {
     register,
     handleSubmit,
@@ -58,7 +60,8 @@ export function ClientForm({
     formState: { errors, isSubmitting },
   } = useForm<ClientInput>({
     resolver: zodResolver(clientSchema),
-    defaultValues: { ...DEFAUT, ...Object.fromEntries(Object.entries(client ?? {}).map(([k, v]) => [k, v ?? ""])) },
+    // Nouveau client : délai de paiement par défaut des Paramètres › Facturation.
+    defaultValues: { ...DEFAUT, paymentTerms: delaiPaiementDefaut, ...Object.fromEntries(Object.entries(client ?? {}).map(([k, v]) => [k, v ?? ""])) },
   });
   const type = useWatch({ control, name: "type" });
   const rechercherEntreprise = useCallback(async (q: string) => (q.length < 3 ? [] : api<Entreprise[]>(`/api/integrations/entreprise?q=${encodeURIComponent(q)}`, "GET")), []);

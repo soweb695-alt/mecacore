@@ -23,7 +23,8 @@ export default async function CampagnesPage() {
     db.campagne.findMany({ where: { type: "AUTOMATIQUE" }, orderBy: { joursAvant: "desc" } }),
     compterDestinataires(),
   ]);
-  const brevo = configBrevo() !== null;
+  const params = await db.parametreGarage.findUnique({ where: { id: 1 }, select: { expediteurEmail: true } });
+  const brevo = configBrevo(params?.expediteurEmail) !== null;
   const edition = can(user, "update", "campagne");
 
   return (

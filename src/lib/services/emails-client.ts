@@ -14,7 +14,7 @@ async function variablesGarage() {
   const g = await db.parametreGarage.findUnique({ where: { id: 1 } });
   return {
     g,
-    vars: { garage: g?.nomGarage ?? "Garage", adresse: g?.adresse ?? "", telephone: g?.telephone ?? "", horaires: texteHoraires(g?.horaires) },
+    vars: { garage_nom: g?.nomGarage ?? "Garage", garage_adresse: g?.adresse ?? "", garage_telephone: g?.telephone ?? "", horaires: texteHoraires(g?.horaires) },
   };
 }
 
@@ -29,7 +29,7 @@ async function prochaineCle(prefixe: string) {
   return `${prefixe}:${(await db.messageLog.count({ where: { cle: { startsWith: `${prefixe}:` } } })) + 1}`;
 }
 
-/** « Véhicule prêt » : e-mail au client de l'ordre de réparation (modèle de « Mon Garage »), tracé dans son historique. */
+/** « Véhicule prêt » : e-mail au client de l'ordre de réparation (modèle des Paramètres › Communication), tracé dans son historique. */
 export async function envoyerVehiculePret(ordreId: string) {
   const o = await db.ordreReparation.findUnique({ where: { id: ordreId }, include: { devis: { include: { client: true, vehicule: true } } } });
   if (!o) throw new ApiError(404, "Ordre de réparation introuvable", "INTROUVABLE");
@@ -39,7 +39,7 @@ export async function envoyerVehiculePret(ordreId: string) {
   const { g, vars } = await variablesGarage();
   const mail = rendreModele(modele("vehiculePret", { sujet: g?.emailVehiculePretSujet, corps: g?.emailVehiculePretCorps }), {
     ...vars,
-    client: nomClient(client),
+    client_nom: nomClient(client),
     vehicule: vehicule ? `${vehicule.marque} ${vehicule.modele}` : "véhicule",
     immatriculation: vehicule?.immatriculation ?? "",
   });
@@ -50,7 +50,7 @@ export async function envoyerVehiculePret(ordreId: string) {
 
 /** Variables d'un rendez-vous pour le modèle « Rappel de rendez-vous ». */
 export function variablesRdv(r: { debut: Date; client: Parameters<typeof nomClient>[0]; vehicule: { marque: string; modele: string; immatriculation: string } }) {
-  return { client: nomClient(r.client), vehicule: `${r.vehicule.marque} ${r.vehicule.modele}`, immatriculation: r.vehicule.immatriculation, date: dateLongue(r.debut), heure: heure(r.debut) };
+  return { client_nom: nomClient(r.client), vehicule: `${r.vehicule.marque} ${r.vehicule.modele}`, immatriculation: r.vehicule.immatriculation, date_rdv: dateLongue(r.debut), heure_rdv: heure(r.debut) };
 }
 
 /** Modèle « Rappel de rendez-vous » rendu pour un RDV (envoi manuel et rappels automatiques J-1 / J-7). */
