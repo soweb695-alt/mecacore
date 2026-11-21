@@ -119,17 +119,19 @@ describe("facture électronique", () => {
 describe("modèles de messages", () => {
   it("échappent le HTML des données client", () => {
     expect(esc(`<script>alert("x")</script>&'`)).toBe("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;&#39;");
-    const mail = rendreModele(MODELES_DEFAUT.rappelRdv, { garage: "<b>G</b>", vehicule: "<img src=x>", client: "A", immatriculation: "AB", date: "lundi", heure: "9:00", adresse: "", telephone: "01", horaires: "" });
+    const mail = rendreModele(MODELES_DEFAUT.rappelRdv, { garage_nom: "<b>G</b>", vehicule: "<img src=x>", client_nom: "A", immatriculation: "AB", date_rdv: "lundi", heure_rdv: "9:00", garage_adresse: "", garage_telephone: "01", horaires: "" });
     expect(mail.html).not.toContain("<img");
     expect(mail.html).not.toContain("<b>G</b>");
   });
   it("modèles modifiables : variables remplacées, texte saisi échappé, paragraphes conservés, défaut si vide", () => {
-    const m = modele("vehiculePret", { sujet: "Prêt : {immatriculation}", corps: "Bonjour {client} <3\n\nÀ bientôt\n{garage}" });
-    const r = rendreModele(m, { immatriculation: "AB-123-CD", client: "Jean", garage: "G&Co" });
+    const m = modele("vehiculePret", { sujet: "Prêt : {{immatriculation}}", corps: "Bonjour {{client_nom}} <3\n\nÀ bientôt\n{{ garage_nom }}" });
+    const r = rendreModele(m, { immatriculation: "AB-123-CD", client_nom: "Jean", garage_nom: "G&Co" });
     expect(r.subject).toBe("Prêt : AB-123-CD");
     expect(r.html).toBe("<p>Bonjour Jean &lt;3</p><p>À bientôt<br>G&amp;Co</p>");
     expect(modele("rappelRdv", { sujet: "  ", corps: null })).toEqual(MODELES_DEFAUT.rappelRdv);
-    expect(rendreModele({ sujet: "{inconnue}", corps: "x" }, {}).subject).toBe("{inconnue}");
+    expect(rendreModele({ sujet: "{{inconnue}} {inconnue}", corps: "x" }, {}).subject).toBe("{{inconnue}} {inconnue}");
+    // Ancienne syntaxe {client} toujours comprise.
+    expect(rendreModele({ sujet: "{client} le {date}", corps: "x" }, { client_nom: "Jean", date_rdv: "lundi" }).subject).toBe("Jean le lundi");
   });
   it("met les horaires en forme, sans les jours vides", () => {
     expect(texteHoraires({ lundi: "08:00-18:00", mardi: "", dimanche: "fermé" })).toBe("Lundi : 08:00-18:00\nDimanche : fermé");

@@ -366,6 +366,7 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await expect(page.getByText(/Non configuré : BREVO_API_KEY et BREVO_SENDER_EMAIL manquent/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Envoyer le test" })).toBeDisabled();
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Paramètres" }).click();
+  await page.getByRole("link", { name: "Fiche de contrôle" }).click();
   await page.getByLabel("Nouveau point de contrôle").fill("Géométrie");
   await page.getByRole("button", { name: "Ajouter" }).click();
   await expect(page.getByText("Point ajouté")).toBeVisible();
@@ -546,4 +547,49 @@ test("19. stock : prix de vente HT, TTC et marge (€ et %) modifiables et synch
   await page.getByRole("link", { name: "E2E-SYNC" }).first().click();
   await expect(page.getByText("Vente TTC : 18,00 €")).toBeVisible();
   await expect(page.getByText("Alerte de seuil désactivée")).toBeVisible();
+});
+
+test("20. Paramètres : facturation, modèle d'e-mail avec variable, catégories ; Livraisons avant Commandes", async ({ page }) => {
+  await login(page, E2E.admin.email, E2E.admin.password);
+  await page.goto("/parametres");
+
+  // Facturation : Espèces décoché, délai 15 jours, remise affichée dans le total.
+  await page.getByLabel("Espèces").uncheck();
+  await page.getByLabel("Délai de paiement").selectOption("15");
+  await page.getByLabel("Remise professionnelle").selectOption("TOTAL");
+  await expect(page.getByText(/une ligne « Remise PRO » est déduite/)).toBeVisible();
+  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Paramètres de facturation enregistrés")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Espèces")).not.toBeChecked();
+  await expect(page.getByLabel("Délai de paiement")).toHaveValue("15");
+
+  // Communication : variable insérée dans l'objet à l'emplacement du curseur.
+  await page.getByRole("link", { name: "Communication" }).click();
+  const objet = page.locator("#vehiculePret-sujet");
+  await objet.fill("Prêt : ");
+  await objet.focus();
+  await page.getByRole("button", { name: "Nom du client" }).first().click();
+  await expect(objet).toHaveValue("Prêt : {{client_nom}}");
+  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Paramètres de communication enregistrés")).toBeVisible();
+
+  // Stocks : nouvelle catégorie, proposée dans la fiche pièce avec le seuil par défaut.
+  await page.getByRole("link", { name: "Stocks & alertes" }).click();
+  await page.getByLabel("Nouvelle catégorie").fill("Échappement");
+  await page.getByRole("button", { name: "Ajouter" }).click();
+  await expect(page.getByText("Catégorie ajoutée")).toBeVisible();
+  await page.goto("/stock");
+  await page.getByRole("button", { name: /Nouvelle pièce/ }).click();
+  const d = page.getByRole("dialog");
+  await d.getByLabel("Catégorie").selectOption("Échappement");
+  await expect(d.getByLabel("Seuil d'alerte")).toHaveValue("5");
+  await page.keyboard.press("Escape");
+
+  // Livraisons et commandes : les bons de livraison avant les bons de commande.
+  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Livraisons et commandes" }).click();
+  await expect(page.getByRole("heading", { name: "Livraisons et commandes" })).toBeVisible();
+  await expect(page.getByText("Bons de commande", { exact: true })).toBeVisible();
+  const titres = await page.locator("[data-slot=card-title]").allTextContents();
+  expect(titres.findIndex((t) => t.startsWith("Bons de livraison"))).toBeLessThan(titres.findIndex((t) => t.startsWith("Bons de commande")));
 });

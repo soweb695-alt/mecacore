@@ -100,11 +100,13 @@ export async function importerClients(rows: string[][], appliquer: boolean): Pro
   }
 
   if (appliquer && aAppliquer.length > 0) {
+    // Nouveau client sans délai dans le fichier : délai par défaut des Paramètres › Facturation.
+    const delaiDefaut = (await db.parametreGarage.findUnique({ where: { id: 1 }, select: { delaiPaiementDefaut: true } }))?.delaiPaiementDefaut ?? 30;
     await db.$transaction(
       async (tx) => {
         for (const { c, id } of aAppliquer) {
           if (id) await tx.client.update({ where: { id }, data: donnees(c) });
-          else await tx.client.create({ data: { ...(donnees(c) as Prisma.ClientCreateInput), marketingOptIn: false, paymentTerms: c.paymentTerms ?? 30 } });
+          else await tx.client.create({ data: { ...(donnees(c) as Prisma.ClientCreateInput), marketingOptIn: false, paymentTerms: c.paymentTerms ?? delaiDefaut } });
         }
       },
       { timeout: 60_000, maxWait: 10_000 },

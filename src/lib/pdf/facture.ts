@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { nomClient } from "@/lib/format";
 import { round2 } from "@/lib/money";
 import { genererPdf } from "@/lib/pdf/document";
-import { garagePdf, lignesPdf, vehiculePdf } from "@/lib/pdf/lignes";
+import { garagePdf, lignesPdf, remiseProTotal, vehiculePdf } from "@/lib/pdf/lignes";
 import { montantRemise } from "@/lib/remise";
 
 /** PDF d'une facture (téléchargement, export groupé). Un brouillon est marqué comme tel, sans numéro. */
@@ -22,10 +22,12 @@ export async function pdfFacture(id: string): Promise<{ nom: string; pdf: Uint8A
     garage,
     client: { nom: nomClient(f.client), adresse: f.client.address, email: f.client.email, siret: f.client.siret },
     vehicule: vehiculePdf(f.devis?.vehicule, f.kilometrage ?? f.devis?.kilometrage),
-    lignes: await lignesPdf(f.lignes),
+    lignes: await lignesPdf(f.lignes, garage.affichageRemise),
+    // Remise PRO : par ligne (taux sous chaque pièce), dans les totaux, ou masquée (Paramètres › Facturation).
+    remiseProTotal: garage.affichageRemise === "TOTAL" ? remiseProTotal(f.lignes) : undefined,
     remiseMontant: montantRemise(f.lignes.map((l) => ({ quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null }))),
     totaux: { totalHT: Number(f.totalHT), totalTVA: Number(f.totalTVA), totalTTC: Number(f.totalTTC) },
-    remisePro: Number(f.remisePro),
+    remisePro: garage.affichageRemise === "LIGNE" ? Number(f.remisePro) : undefined,
     remiseGlobale:
       f.totalHTAvantRemise !== null && Number(f.remiseGlobaleMontant) > 0
         ? {
@@ -41,7 +43,9 @@ export async function pdfFacture(id: string): Promise<{ nom: string; pdf: Uint8A
     notes: [
       ...(brouillon ? ["Document de travail : facture non émise, sans valeur comptable."] : []),
       ...(f.devis || f.bonsLivraison.length === 0 ? [] : [`Bons de livraison facturés : ${f.bonsLivraison.map((b) => b.numero).join(", ")}.`]),
-      "En cas de retard de paiement, une indemnité forfaitaire de 40 € pour frais de recouvrement sera exigible (art. L441-10 du Code de commerce). Pas d'escompte pour paiement anticipé.",
+      `Modes de paiement acceptés : ${garage.modesPaiement.join(", ")}.`,
+      // Mentions légales (CGV, pénalités de retard) : Paramètres › Facturation.
+      ...garage.mentionsFacture.split(/\n+/).map((l) => l.trim()).filter(Boolean),
     ],
   });
   return { nom: f.numero ?? `brouillon-${f.id}`, pdf };

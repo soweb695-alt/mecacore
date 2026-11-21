@@ -30,6 +30,8 @@ export interface PdfDocData {
   remisePro?: number;
   /** Montant HT de la remise professionnelle déjà déduite des prix. */
   remiseMontant?: number;
+  /** Remise PRO affichée « uniquement dans le total » : total HT brut puis ligne « Remise PRO » avant le total HT. */
+  remiseProTotal?: { totalHTBrut: number; montant: number };
   notes?: string[];
   paiement?: { paye: number; reste: number };
   /** Remise globale sur la facture : tracée ligne à ligne dans le bloc des totaux. */
@@ -195,6 +197,10 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
     y -= b ? 18 : 14;
   };
   if (!d.sansPrix) {
+    if (d.remiseProTotal) {
+      ligneTotal("Total HT brut", eur(d.remiseProTotal.totalHTBrut));
+      ligneTotal("Remise PRO", `- ${eur(d.remiseProTotal.montant)}`);
+    }
     if (d.remiseGlobale) {
       if (d.remiseGlobale.totalTTCAvantRemise !== undefined) ligneTotal("Total TTC avant remise", eur(d.remiseGlobale.totalTTCAvantRemise));
       else ligneTotal("Total HT avant remise", eur(d.remiseGlobale.totalHTAvantRemise));

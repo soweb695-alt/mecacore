@@ -3,7 +3,6 @@ import { BanqueForm } from "@/components/parametres/banque-form";
 import { BrevoConnexion } from "@/components/parametres/brevo-connexion";
 import { GarageForm } from "@/components/parametres/garage-form";
 import { HorairesForm } from "@/components/parametres/horaires-form";
-import { ModelesEmailForm } from "@/components/parametres/modeles-email-form";
 import { LogoUpload } from "@/components/parametres/logo-upload";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +18,7 @@ export default async function MonGaragePage() {
   const g = await db.parametreGarage.findUnique({ where: { id: 1 } });
   return (
     <>
-      <PageHeader title="Mon Garage" description="Coordonnées et mentions légales des PDF, horaires d'ouverture, modèles des e-mails envoyés aux clients, logo et IBAN." />
+      <PageHeader title="Mon Garage" description="Coordonnées et mentions légales des PDF, horaires d'ouverture, envoi des e-mails, logo et IBAN. Les modèles d'e-mails sont dans Paramètres › Communication." />
       <div className="space-y-4">
         <Card>
           <CardHeader>
@@ -43,25 +42,11 @@ export default async function MonGaragePage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Modèles d&apos;e-mails</CardTitle>
-            <CardDescription>Textes envoyés par les boutons « Véhicule prêt » (ordre de réparation, devis) et « Rappel RDV » (planning), et par les rappels automatiques.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ModelesEmailForm
-              initial={{
-                vehiculePret: { sujet: g?.emailVehiculePretSujet ?? "", corps: g?.emailVehiculePretCorps ?? "" },
-                rappelRdv: { sujet: g?.emailRappelRdvSujet ?? "", corps: g?.emailRappelRdvCorps ?? "" },
-              }}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
             <CardTitle>Envoi des e-mails (Brevo)</CardTitle>
-            <CardDescription>Devis, bons de livraison, véhicule prêt, rappels et campagnes partent par Brevo. La clé se règle chez l&apos;hébergeur, pas ici.</CardDescription>
+            <CardDescription>Devis, bons de livraison, véhicule prêt, rappels et campagnes partent par Brevo. La clé se règle chez l&apos;hébergeur ; l&apos;expéditeur dans Paramètres › Communication.</CardDescription>
           </CardHeader>
           <CardContent>
-            <BrevoConnexion manques={manquesBrevo()} expediteur={process.env.BREVO_SENDER_EMAIL?.trim() || null} emailGarage={g?.email ?? ""} />
+            <BrevoConnexion manques={manquesBrevo(g?.expediteurEmail)} expediteur={g?.expediteurEmail?.trim() || process.env.BREVO_SENDER_EMAIL?.trim() || null} emailGarage={g?.email ?? ""} />
           </CardContent>
         </Card>
         <Card>

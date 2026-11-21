@@ -133,7 +133,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/campagnes", label: "Campagnes", icon: "megaphone", group: "Clients", resource: "campagne" },
   { href: "/stock", label: "Stocks", icon: "box", group: "Gestion", resource: "piece" },
   { href: "/retours", label: "Retours et consignes", icon: "rotate-ccw", group: "Gestion", resource: "retour" },
-  { href: "/bons-livraison", label: "Commandes et livraisons", icon: "truck", group: "Gestion", resource: "bonCommande" },
+  { href: "/bons-livraison", label: "Livraisons et commandes", icon: "truck", group: "Gestion", resource: "bonCommande" },
   { href: "/relances", label: "Relances", icon: "bell-ring", group: "Gestion", resource: "facture" },
   { href: "/tarifs", label: "Tarifs", icon: "tag", group: "Gestion", resource: "tarif" },
   { href: "/analyse", label: "Analyse", icon: "bar-chart-3", group: "Gestion", resource: "analyse" },

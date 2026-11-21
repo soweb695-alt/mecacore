@@ -6,9 +6,10 @@ import { envoyerEmail } from "@/lib/services/messages";
 
 /** État de la connexion Brevo (administrateur) : configuration présente et clé API acceptée par Brevo. */
 export const GET = route({ permission: ["update", "parametre"] }, async () => {
-  const manques = manquesBrevo();
+  const p = await db.parametreGarage.findUnique({ where: { id: 1 }, select: { expediteurEmail: true } });
+  const manques = manquesBrevo(p?.expediteurEmail);
   const compte = manques.includes("BREVO_API_KEY") ? null : await verifierCompteBrevo();
-  return { manques, expediteur: process.env.BREVO_SENDER_EMAIL?.trim() || null, compte };
+  return { manques, expediteur: p?.expediteurEmail?.trim() || process.env.BREVO_SENDER_EMAIL?.trim() || null, compte };
 });
 
 const testSchema = z.object({ destinataire: z.string().trim().toLowerCase().email("Adresse e-mail invalide").max(120) });

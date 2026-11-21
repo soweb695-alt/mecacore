@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { nomClient } from "@/lib/format";
 import { genererPdf } from "@/lib/pdf/document";
-import { garagePdf, lignesPdf, vehiculePdf } from "@/lib/pdf/lignes";
+import { garagePdf, lignesPdf, remiseProTotal, vehiculePdf } from "@/lib/pdf/lignes";
 import { montantRemise } from "@/lib/remise";
 
 /** PDF d'un devis (téléchargement et pièce jointe d'e-mail). Renvoie null si le devis est introuvable. */
@@ -20,10 +20,12 @@ export async function pdfDevis(id: string): Promise<{ numero: string; pdf: Uint8
     garage,
     client: { nom: nomClient(d.client), adresse: d.client.address, email: d.client.email, siret: d.client.siret },
     vehicule: vehiculePdf(d.vehicule, d.kilometrage ?? d.vehicule?.kilometrage),
-    lignes: await lignesPdf(d.lignes),
+    lignes: await lignesPdf(d.lignes, garage.affichageRemise),
+    // Remise PRO : par ligne (taux sous chaque pièce), dans les totaux, ou masquée (Paramètres › Facturation).
+    remiseProTotal: garage.affichageRemise === "TOTAL" ? remiseProTotal(d.lignes) : undefined,
     remiseMontant: montantRemise(d.lignes.map((l) => ({ quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null }))),
     totaux: { totalHT: Number(d.totalHT), totalTVA: Number(d.totalTVA), totalTTC: Number(d.totalTTC) },
-    remisePro: Number(d.remisePro),
+    remisePro: garage.affichageRemise === "LIGNE" ? Number(d.remisePro) : undefined,
     remiseGlobale:
       d.totalHTAvantRemise !== null && Number(d.remiseGlobaleMontant) > 0
         ? {

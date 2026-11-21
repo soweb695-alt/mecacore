@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Field } from "@/components/forms/field";
+import { useModesPaiement } from "@/components/parametres-context";
 import { SubmitButton, useCloseDialog } from "@/components/forms/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
 import { paiementSchema } from "@/lib/validators/facture";
+import { LIBELLES_MODE } from "@/lib/validators/parametres";
 import type { z } from "zod";
 
 type Values = z.infer<typeof paiementSchema>;
@@ -18,13 +20,14 @@ type Values = z.infer<typeof paiementSchema>;
 export function PaiementForm({ factureId, reste }: { factureId: string; reste: number }) {
   const router = useRouter();
   const close = useCloseDialog();
+  const modes = useModesPaiement();
   const {
     register,
     handleSubmit,
     control,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(paiementSchema), defaultValues: { montant: reste, mode: "CB", nombreFois: null, reference: "" } });
+  } = useForm<Values>({ resolver: zodResolver(paiementSchema), defaultValues: { montant: reste, mode: modes[0] ?? "CB", nombreFois: null, reference: "" } });
   const mode = useWatch({ control, name: "mode" });
   const fois = useWatch({ control, name: "nombreFois" });
 
@@ -60,11 +63,11 @@ export function PaiementForm({ factureId, reste }: { factureId: string; reste: n
             },
           })}
         >
-          <option value="CB">Carte bancaire</option>
-          <option value="ESPECES">Espèces</option>
-          <option value="CHEQUE">Chèque</option>
-          <option value="VIREMENT">Virement</option>
-          <option value="PLUSIEURS_FOIS">Paiement en plusieurs fois</option>
+          {modes.map((m) => (
+            <option key={m} value={m}>
+              {LIBELLES_MODE[m]}
+            </option>
+          ))}
         </NativeSelect>
       </Field>
       {mode === "PLUSIEURS_FOIS" && (

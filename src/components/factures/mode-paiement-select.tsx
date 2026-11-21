@@ -3,8 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useModesPaiement } from "@/components/parametres-context";
 import { NativeSelect } from "@/components/ui/native-select";
 import { api } from "@/lib/client-api";
+import { LIBELLES_MODE } from "@/lib/validators/parametres";
 
 type Mode = "" | "CB" | "ESPECES" | "CHEQUE" | "VIREMENT" | "PLUSIEURS_FOIS";
 
@@ -12,6 +14,7 @@ type Mode = "" | "CB" | "ESPECES" | "CHEQUE" | "VIREMENT" | "PLUSIEURS_FOIS";
 export function ModePaiementSelect({ factureId, valeur, modifiable }: { factureId: string; valeur: Mode; modifiable: boolean }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(valeur);
+  const modes = useModesPaiement(valeur);
   return (
     <NativeSelect
       aria-label="Mode de règlement prévu"
@@ -32,11 +35,11 @@ export function ModePaiementSelect({ factureId, valeur, modifiable }: { factureI
       }}
     >
       <option value="">Non précisé</option>
-      <option value="CB">Carte bancaire</option>
-      <option value="ESPECES">Espèces</option>
-      <option value="CHEQUE">Chèque</option>
-      <option value="VIREMENT">Virement</option>
-      <option value="PLUSIEURS_FOIS">Paiement en plusieurs fois</option>
+      {modes.map((m) => (
+        <option key={m} value={m}>
+          {LIBELLES_MODE[m]}
+        </option>
+      ))}
     </NativeSelect>
   );
 }
