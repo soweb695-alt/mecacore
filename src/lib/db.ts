@@ -10,7 +10,7 @@ function createClient() {
   if (!connectionString) throw new Error("DATABASE_URL est manquante");
   const adapter = new PrismaPg({ connectionString, max: 5, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 10_000 });
   // Le logo (jusqu'à 1 Mo) n'est lu que lorsqu'on le demande explicitement (`select: { logoData: true }`).
-  return new PrismaClient({ adapter, omit: { parametreGarage: { logoData: true } }, log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
+  return new PrismaClient({ adapter, omit: { parametreGarage: { logoData: true }, ficheControle: { examinantSignature: true, responsableSignature: true } }, log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 }
 
 export const db = globalForPrisma.prisma ?? createClient();

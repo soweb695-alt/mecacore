@@ -116,8 +116,26 @@ enum StatutFiche {
 enum ResultatControle {
   NON_VERIFIE
   OK
+  /// Ancien modèle de fiche (avant les catégories).
   A_SURVEILLER
   DEFAUT
+  /// Fiche par catégories : second statut selon le type de la catégorie, ou « non concerné ».
+  ABIME
+  NON_CONFORME
+  A_REPARER
+  NON_CONCERNE
+}
+
+/// Statuts proposés pour les points d'une catégorie de la fiche de contrôle.
+enum TypeStatutsControle {
+  /// Ok / Abîmé (pneus)
+  OK_ABIME
+  /// Ok / N.C. (niveaux)
+  OK_NC
+  /// Ok / À réparer (éléments du véhicule)
+  OK_A_REPARER
+  /// Case à cocher simple (papiers et accessoires de bord)
+  CASE
 }
 
 enum StatutRdv {
@@ -721,24 +739,53 @@ model TentativeConnexion {
 }
 
 /// Modèle paramétrable (administrateur) : points copiés dans chaque fiche de contrôle à sa création.
+/// Catégorie du modèle de fiche de contrôle (Paramètres › Fiche de contrôle).
+model CategorieControle {
+  id          String              @id @default(cuid())
+  libelle     String
+  typeStatuts TypeStatutsControle
+  position    Int                 @default(0)
+  isActive    Boolean             @default(true)
+
+  points PointControle[]
+}
+
 model PointControle {
-  id       String  @id @default(cuid())
-  libelle  String
-  position Int     @default(0)
-  isActive Boolean @default(true)
+  id          String  @id @default(cuid())
+  libelle     String
+  position    Int     @default(0)
+  isActive    Boolean @default(true)
+  categorieId String?
+
+  categorie CategorieControle? @relation(fields: [categorieId], references: [id], onDelete: Cascade)
+
+  @@index([categorieId])
 }
 
 model FicheControle {
-  id           String      @id @default(cuid())
-  ordreId      String      @unique
-  statut       StatutFiche @default(EN_COURS)
-  remarques    String?
-  valideeLe    DateTime?
-  valideeParId String?
-  traiteeLe    DateTime?
-  traiteeParId String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                   String      @id @default(cuid())
+  ordreId              String      @unique
+  /// 1 : ancien modèle (liste simple, OK / À surveiller / Défaut) ; 2 : fiche par catégories.
+  version              Int         @default(2)
+  statut               StatutFiche @default(EN_COURS)
+  remarques            String?
+  /// Croquis : croix placées sur le schéma du véhicule ([{ x, y }] en fraction de la largeur / hauteur, 0 à 1).
+  dommages             Json?
+  /// Examinant (technicien) : nom, prénom et signature (PNG) recueillis à la validation.
+  examinantNom         String?
+  examinantPrenom      String?
+  examinantSignature   Bytes?
+  /// Vérification du responsable (Magasin ou administrateur) : nom et signature (PNG).
+  responsableNom       String?
+  responsableSignature Bytes?
+  verifieeLe           DateTime?
+  verifieeParId        String?
+  valideeLe            DateTime?
+  valideeParId         String?
+  traiteeLe            DateTime?
+  traiteeParId         String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   ordre      OrdreReparation @relation(fields: [ordreId], references: [id], onDelete: Cascade)
   valideePar User?           @relation("FicheValidee", fields: [valideeParId], references: [id], onDelete: SetNull)
@@ -750,11 +797,15 @@ model FicheControle {
 
 /// Copie du libellé du modèle au moment de la création : modifier le modèle ne change pas les fiches existantes.
 model PointFiche {
-  id       String           @id @default(cuid())
-  ficheId  String
-  libelle  String
-  position Int              @default(0)
-  resultat ResultatControle @default(NON_VERIFIE)
+  id                String               @id @default(cuid())
+  ficheId           String
+  libelle           String
+  position          Int                  @default(0)
+  resultat          ResultatControle     @default(NON_VERIFIE)
+  /// Fiche par catégories : catégorie et type de statuts copiés du modèle à la création de la fiche.
+  categorie         String?
+  categoriePosition Int                  @default(0)
+  typeStatuts       TypeStatutsControle?
 
   fiche FicheControle @relation(fields: [ficheId], references: [id], onDelete: Cascade)
 

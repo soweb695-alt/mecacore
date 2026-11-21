@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CategoriesEditor } from "@/components/parametres/categories-editor";
 import { CommunicationForm } from "@/components/parametres/communication-form";
 import { FacturationForm } from "@/components/parametres/facturation-form";
-import { PointsControleEditor } from "@/components/parametres/points-controle-editor";
+import { CategoriesControleEditor } from "@/components/parametres/categories-controle-editor";
 import { SectionParametres } from "@/components/parametres/section";
 import { SeuilForm } from "@/components/parametres/seuil-form";
 import { PageHeader } from "@/components/page-header";
@@ -102,10 +102,18 @@ async function OngletStocks({ seuil }: { seuil: number }) {
 }
 
 async function OngletFiche() {
-  const points = await db.pointControle.findMany({ orderBy: [{ position: "asc" }, { id: "asc" }] });
+  const categories = await db.categorieControle.findMany({
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+    include: { points: { orderBy: [{ position: "asc" }, { id: "asc" }] } },
+  });
   return (
-    <SectionParametres titre="Points de la fiche de contrôle" description="Chaque ordre de réparation reçoit une copie de cette liste. Les fiches déjà créées ne sont pas modifiées.">
-      <PointsControleEditor points={points.map((p) => ({ id: p.id, libelle: p.libelle, isActive: p.isActive }))} />
+    <SectionParametres
+      titre="Modèle de la fiche de contrôle"
+      description="Catégories, colonnes de statut (Ok / Abîmé, Ok / N.C., Ok / À réparer ou case à cocher) et points à vérifier. Chaque ordre de réparation reçoit une copie de ce modèle ; les fiches déjà créées ne sont pas modifiées."
+    >
+      <CategoriesControleEditor
+        categories={categories.map((c) => ({ id: c.id, libelle: c.libelle, typeStatuts: c.typeStatuts, isActive: c.isActive, points: c.points.map((p) => ({ id: p.id, libelle: p.libelle, isActive: p.isActive })) }))}
+      />
     </SectionParametres>
   );
 }

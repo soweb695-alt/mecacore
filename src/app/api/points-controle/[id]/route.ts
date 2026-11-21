@@ -9,7 +9,8 @@ export const PATCH = route<z.infer<typeof pointControleUpdateSchema>, undefined,
   const p = await db.pointControle.findUnique({ where: { id } });
   if (!p) throw new ApiError(404, "Point introuvable", "INTROUVABLE");
   if (body.deplacer) {
-    const liste = await db.pointControle.findMany({ orderBy: [{ position: "asc" }, { id: "asc" }] });
+    // Déplacement à l'intérieur de sa catégorie.
+    const liste = await db.pointControle.findMany({ where: { categorieId: p.categorieId }, orderBy: [{ position: "asc" }, { id: "asc" }] });
     const i = liste.findIndex((x) => x.id === id);
     const j = body.deplacer === "haut" ? i - 1 : i + 1;
     if (j >= 0 && j < liste.length) {

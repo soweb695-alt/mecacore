@@ -8,7 +8,7 @@ import { enregistrerFiche, obtenirFiche } from "@/lib/services/fiche-controle";
 import { accesOrdre, ajouterPhoto, demarrerTravaux, enregistrerSignature, terminerOrdre } from "@/lib/services/ordres";
 import { creerBonCommande, creerBonLivraison, marquerPrete, receptionnerBonCommande } from "@/lib/services/bl";
 import { analyser, bornesPeriode } from "@/lib/services/analyse";
-import { creneau, ligne, resetDb, seedBase } from "./helpers";
+import { creneau, ligne, resetDb, seedBase, EXAMINANT } from "./helpers";
 
 let b: Awaited<ReturnType<typeof seedBase>>;
 beforeEach(async () => {
@@ -39,7 +39,7 @@ describe("ordres de réparation : signature, travaux et clôture", () => {
     // La fin des travaux exige la fiche de contrôle validée.
     await expect(terminerOrdre(ordreId, 84_000)).rejects.toMatchObject({ code: "FICHE_NON_VALIDEE" });
     const fiche = await obtenirFiche(ordreId);
-    await enregistrerFiche(ordreId, { id: b.meca.id, role: "MECANICIEN" }, { points: fiche.points.map((p) => ({ id: p.id, resultat: "OK" })), remarques: "", valider: true });
+    await enregistrerFiche(ordreId, { id: b.meca.id, role: "MECANICIEN" }, { points: fiche.points.map((p) => ({ id: p.id, resultat: "OK" })), remarques: "", valider: true, examinant: EXAMINANT });
     await terminerOrdre(ordreId, 84_000);
     const o = await db.ordreReparation.findUniqueOrThrow({ where: { id: ordreId } });
     expect(o).toMatchObject({ statut: "A_TRAITER_MAGASIN", kilometrage: 84_000 });

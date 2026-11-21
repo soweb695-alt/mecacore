@@ -10,7 +10,8 @@ import { LABELS, StatusBadge, TONE_ORDRE } from "@/components/status-badge";
 import { db } from "@/lib/db";
 import { nomClient } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { obtenirFiche } from "@/lib/services/fiche-controle";
+import { lireDommages } from "@/lib/fiche-controle";
+import { obtenirFiche, signaturesFiche } from "@/lib/services/fiche-controle";
 import { requirePage } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Ordre de réparation" };
@@ -45,6 +46,9 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
   const v = o.devis.vehicule;
   const fiche = await obtenirFiche(o.id);
   const valideePar = fiche.valideeParId ? await db.user.findUnique({ where: { id: fiche.valideeParId }, select: { firstName: true } }) : null;
+  const signatures = await signaturesFiche(fiche.id);
+  const dateFiche = (d: Date) => new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short" }).format(d);
+  const kmFiche = o.kilometrage ?? o.devis.kilometrage ?? v?.kilometrage ?? null;
   const valideeLe = fiche.valideeLe
     ? `le ${new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }).format(fiche.valideeLe)}${valideePar ? ` par ${valideePar.firstName}` : ""}`
     : null;
@@ -98,12 +102,28 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
         />
         <FicheControle
           ordreId={o.id}
+          version={fiche.version}
           statut={fiche.statut}
-          points={fiche.points.map((p) => ({ id: p.id, libelle: p.libelle, resultat: p.resultat }))}
+          entete={{
+            date: dateFiche(fiche.valideeLe ?? fiche.createdAt),
+            immatriculation: v?.immatriculation ?? "",
+            marque: v ? `${v.marque} ${v.modele}` : "",
+            kilometrage: kmFiche != null ? `${kmFiche.toLocaleString("fr-FR")} km` : "",
+          }}
+          points={fiche.points.map((p) => ({ id: p.id, libelle: p.libelle, resultat: p.resultat, categorie: p.categorie, categoriePosition: p.categoriePosition, typeStatuts: p.typeStatuts }))}
           remarques={fiche.remarques ?? ""}
+          dommages={lireDommages(fiche.dommages)}
+          examinant={{
+            // Le technicien qui remplit la fiche est proposé comme examinant.
+            nom: fiche.examinantNom ?? (mecano ? user.lastName : ""),
+            prenom: fiche.examinantPrenom ?? (mecano ? user.firstName : ""),
+            signe: fiche.statut !== "EN_COURS" && !!signatures?.examinantSignature,
+          }}
+          responsable={{ nom: fiche.responsableNom ?? "", le: fiche.verifieeLe ? dateFiche(fiche.verifieeLe) : null, signe: !!signatures?.responsableSignature }}
           validee={valideeLe}
           peutRemplir={user.role !== "SECRETARIAT" && can(user, "update", "ordre", o.userId ?? "")}
           peutTraiter={user.role !== "MECANICIEN"}
+          nomUtilisateur={`${user.firstName} ${user.lastName}`}
         />
       </div>
     </>

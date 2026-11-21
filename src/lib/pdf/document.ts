@@ -48,7 +48,7 @@ export interface PdfDocData {
 const ttc = (ht: number, taux: number) => Math.round(ht * (100 + taux)) / 100;
 
 /** Les polices standard PDF n'encodent que le Latin-1 : on normalise espaces fines et caractères hors jeu. */
-const safe = (s: string) =>
+export const safe = (s: string) =>
   s
     .replace(/[   ]/g, " ")
     .replace(/[‘’]/g, "'")

@@ -22,7 +22,7 @@ import { PUT as fichePut } from "@/app/api/ordres-reparation/[id]/fiche/route";
 import { POST as ficheRenvoyer } from "@/app/api/ordres-reparation/[id]/fiche/renvoyer/route";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
 import { obtenirFiche } from "@/lib/services/fiche-controle";
-import { creneau, ligne, resetDb, seedBase } from "./helpers";
+import { creneau, ligne, resetDb, seedBase, EXAMINANT, modeleFiche } from "./helpers";
 
 let b: Awaited<ReturnType<typeof seedBase>>;
 let adminId = "";
@@ -35,13 +35,14 @@ const ctx = (params: Record<string, string> = {}) => ({ params: Promise.resolve(
 const data = async (r: Response) => (await r.json()).data;
 const MO = { type: "MAIN_OEUVRE" as const, designation: "Main d'œuvre", quantite: 1, prixUnitaireHT: 50, tvaRate: 20 };
 
+let categorieId: string;
 beforeEach(async () => {
   await resetDb();
   b = await seedBase();
   adminId = (await db.user.create({ data: { email: "adm@test.fr", passwordHash: "x", firstName: "Adm", lastName: "Test", role: "ADMIN" } })).id;
   courant = sec();
-  // Le modèle de fiche de contrôle est vidé avec le reste : on recrée huit points.
-  await db.pointControle.createMany({ data: Array.from({ length: 8 }, (_, i) => ({ libelle: `Point ${i + 1}`, position: i })) });
+  // Le modèle de fiche de contrôle est vidé avec le reste : on recrée une catégorie de huit points.
+  categorieId = await modeleFiche(8);
 });
 
 describe("recherches", () => {
@@ -205,7 +206,7 @@ describe("fiche de contrôle", () => {
     await validerDevis(id, creneau(b.meca.id));
     return db.ordreReparation.findFirstOrThrow({ where: { devisId: id } });
   }
-  const saisie = (points: { id: string; resultat: string }[], valider: boolean, remarques = "RAS") => ({ points, remarques, valider });
+  const saisie = (points: { id: string; resultat: string }[], valider: boolean, remarques = "RAS") => ({ points, remarques, valider, ...(valider ? { examinant: EXAMINANT } : {}) });
 
   it("copie les points actifs du modèle, sans suivre les modifications ultérieures du modèle", async () => {
     const o = await ordre();
@@ -213,13 +214,13 @@ describe("fiche de contrôle", () => {
     expect(f.points.length).toBeGreaterThanOrEqual(8);
     expect(f.points.every((p) => p.resultat === "NON_VERIFIE")).toBe(true);
     courant = admin();
-    const nouveau = await data(await pointPost(req("/api/points-controle", "POST", { libelle: "Points ajoutés" }), ctx()));
+    const nouveau = await data(await pointPost(req("/api/points-controle", "POST", { libelle: "Points ajoutés", categorieId }), ctx()));
     expect((await obtenirFiche(o.id)).points).toHaveLength(f.points.length);
     // Désactivation et suppression d'un point du modèle
     expect((await pointPatch(req(`/api/points-controle/${nouveau.id}`, "PATCH", { isActive: false }), ctx({ id: nouveau.id }))).status).toBe(200);
     expect((await pointDelete(req(`/api/points-controle/${nouveau.id}`, "DELETE"), ctx({ id: nouveau.id }))).status).toBe(200);
     courant = sec();
-    expect((await pointPost(req("/api/points-controle", "POST", { libelle: "Interdit" }), ctx())).status).toBe(403);
+    expect((await pointPost(req("/api/points-controle", "POST", { libelle: "Interdit", categorieId }), ctx())).status).toBe(403);
   });
 
   it("le technicien remplit puis valide : la fiche passe au Magasin, qui peut la renvoyer", async () => {
@@ -237,14 +238,14 @@ describe("fiche de contrôle", () => {
     // Enregistrement en brouillon puis validation.
     expect((await fichePut(req(`/api/ordres-reparation/${o.id}/fiche`, "PUT", saisie(tous("OK"), false, "Brouillon")), ctx({ id: o.id }))).status).toBe(200);
     const pts = tous("OK");
-    pts[1].resultat = "A_SURVEILLER";
+    pts[1].resultat = "A_REPARER";
     expect((await fichePut(req(`/api/ordres-reparation/${o.id}/fiche`, "PUT", saisie(pts, true, "Pneus à surveiller")), ctx({ id: o.id }))).status).toBe(200);
     const apres = await db.ficheControle.findUniqueOrThrow({ where: { ordreId: o.id }, include: { points: true } });
     expect(apres).toMatchObject({ statut: "TRANSMISE", remarques: "Pneus à surveiller", valideeParId: b.meca.id });
-    expect(apres.points.filter((p) => p.resultat === "A_SURVEILLER")).toHaveLength(1);
+    expect(apres.points.filter((p) => p.resultat === "A_REPARER")).toHaveLength(1);
 
     // Plus modifiable par l'atelier une fois transmise.
-    const encore = await fichePut(req(`/api/ordres-reparation/${o.id}/fiche`, "PUT", saisie(tous("DEFAUT"), true)), ctx({ id: o.id }));
+    const encore = await fichePut(req(`/api/ordres-reparation/${o.id}/fiche`, "PUT", saisie(tous("A_REPARER"), true)), ctx({ id: o.id }));
     expect(encore.status).toBe(409);
     // L'atelier ne renvoie pas la fiche : c'est le Magasin qui la renvoie pour correction.
     expect((await ficheRenvoyer(req(`/api/ordres-reparation/${o.id}/fiche/renvoyer`, "POST"), ctx({ id: o.id }))).status).toBe(403);
