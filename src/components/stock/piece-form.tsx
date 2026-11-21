@@ -3,14 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Field } from "@/components/forms/field";
 import { SubmitButton, useCloseDialog } from "@/components/forms/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { useParametres } from "@/components/parametres-context";
 import { api } from "@/lib/client-api";
 import { calculerMarge, prixHTDepuisTTC, prixTTCDepuisHT, TVA_PIECE, venteHTDepuisMarge, venteHTDepuisTauxMarge } from "@/lib/money";
@@ -170,14 +170,14 @@ export function PieceForm({
           <Input id="reference" className="uppercase" aria-invalid={!!errors.reference} {...register("reference")} />
         </Field>
         <Field label="Catégorie" htmlFor="categorie" error={errors.categorie?.message}>
-          <NativeSelect id="categorie" {...register("categorie")}>
-            <option value="">Sans catégorie</option>
-            {choixCategories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </NativeSelect>
+          {/* Propositions au fil de la frappe (« frei » → Freinage), catégories des Paramètres › Stocks & alertes. */}
+          <Controller
+            control={control}
+            name="categorie"
+            render={({ field }) => (
+              <AutocompleteInput id="categorie" value={field.value ?? ""} onChange={field.onChange} suggestions={choixCategories} placeholder="Freinage, Filtration…" maxLength={60} invalid={!!errors.categorie} />
+            )}
+          />
         </Field>
       </div>
       <Field label="Désignation" htmlFor="nom" error={errors.nom?.message}>
