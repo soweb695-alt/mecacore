@@ -2,16 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jsonError } from "@/lib/api";
 import { verifierCron } from "@/lib/cron";
 import { ApiError } from "@/lib/errors";
-import { envoyerRapportImpayes } from "@/lib/services/factures";
 
-// Planifié chaque lundi matin (voir README) : récapitulatif des factures impayées.
+// Désactivé : aucun e-mail ne part automatiquement (y compris le récapitulatif interne des impayés).
+// Les impayés se suivent dans l'onglet Relances. La route reste en place (réponse sans envoi).
 export async function GET(req: NextRequest) {
   try {
     verifierCron(req);
-    return NextResponse.json({ data: await envoyerRapportImpayes() });
+    return NextResponse.json({ data: { desactive: true, message: "Récapitulatif des impayés : voir l'onglet Relances" } });
   } catch (e) {
     if (e instanceof ApiError) return jsonError(e.status, e.message, e.code);
-    console.error("[cron impayes] erreur");
     return jsonError(500, "Erreur interne", "INTERNE");
   }
 }

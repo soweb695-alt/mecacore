@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { envoyerSms } from "@/lib/services/messages";
 import { enregistrerRdv } from "@/lib/services/rdv";
-import { envoyerRappelsRdv } from "@/lib/services/rappels";
+import { envoyerRappelValide, rappelsAEnvoyer } from "@/lib/services/rappels";
 import { ajouterJoursStr, jourParis } from "@/lib/time";
 import { resetDb, seedBase } from "./helpers";
 
@@ -44,7 +44,7 @@ describe("rendez-vous", () => {
 });
 
 describe("messages et rappels", () => {
-  it("envoie les rappels J-1 / J-7 une seule fois (idempotent) et les trace dans MessageLog", async () => {
+  it("rappels J-1 / J-7 : proposés à la validation, rien ne part tout seul ; envoyés une seule fois", async () => {
     await db.client.update({ where: { id: b.client.id }, data: { phone: "06 12 34 56 78", email: "j@d.fr" } });
     await db.campagne.createMany({
       data: [
@@ -57,22 +57,30 @@ describe("messages et rappels", () => {
     await enregistrerRdv({ ...base(), debut: `${demain}T14:00`, fin: `${demain}T15:00` });
     await enregistrerRdv({ ...base(), userId: b.user.id, debut: `${j7}T09:00`, fin: `${j7}T10:00` });
 
-    const r1 = await envoyerRappelsRdv();
-    const r2 = await envoyerRappelsRdv();
-    expect(r1.envoyes).toBe(2);
-    expect(r2.envoyes).toBe(0);
-    const logs = await db.messageLog.findMany({ orderBy: { canal: "asc" } });
-    expect(logs).toHaveLength(2);
+    // La liste ne déclenche aucun envoi.
+    const liste = await rappelsAEnvoyer();
+    expect(liste.map((r) => [r.joursAvant, r.canal, r.destinataire])).toEqual([
+      [1, "SMS", "06 12 34 56 78"],
+      [7, "EMAIL", "j@d.fr"],
+    ]);
+    expect(await db.messageLog.count()).toBe(0);
+
+    // Envoi validé : une fois, puis le rappel sort de la liste.
+    for (const r of liste) expect(["envoye", "simulation"]).toContain(await envoyerRappelValide(r.rdvId, r.campagneId));
+    expect(await envoyerRappelValide(liste[0].rdvId, liste[0].campagneId)).toBe("deja");
+    const logs = await db.messageLog.findMany();
     expect(logs.map((l) => l.canal).sort()).toEqual(["EMAIL", "SMS"]);
     expect(logs.every((l) => l.clientId === b.client.id)).toBe(true);
+    expect(await rappelsAEnvoyer()).toEqual([]);
   });
-  it("n'envoie pas de rappel pour un rendez-vous annulé", async () => {
+  it("ne propose pas de rappel pour un rendez-vous annulé, et refuse de l'envoyer", async () => {
     await db.client.update({ where: { id: b.client.id }, data: { phone: "0612345678" } });
-    await db.campagne.create({ data: { nom: "J-1", type: "AUTOMATIQUE", template: "rdv_rappel_j1", declencheur: "RDV_J1", joursAvant: 1, canal: "SMS" } });
+    const c = await db.campagne.create({ data: { nom: "J-1", type: "AUTOMATIQUE", template: "rdv_rappel_j1", declencheur: "RDV_J1", joursAvant: 1, canal: "SMS" } });
     const demain = ajouterJoursStr(jourParis(), 1);
     const { id } = await enregistrerRdv({ ...base(), debut: `${demain}T14:00`, fin: `${demain}T15:00` });
     await db.rendezVous.update({ where: { id }, data: { statut: "ANNULE" } });
-    expect((await envoyerRappelsRdv()).envoyes).toBe(0);
+    expect(await rappelsAEnvoyer()).toEqual([]);
+    await expect(envoyerRappelValide(id, c.id)).rejects.toMatchObject({ code: "RAPPEL_PERIME" });
   });
   it("refuse un message marketing sans consentement RGPD", async () => {
     const e = { cle: "camp:1", clientId: b.client.id, template: "promo", destinataire: "0612345678", message: "Promo", marketing: true };

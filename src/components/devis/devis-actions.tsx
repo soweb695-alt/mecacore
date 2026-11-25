@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, Check, FileDown, Lock, Mail, Undo2, X } from "lucide-react";
+import { AlertTriangle, Check, FileDown, Lock, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/confirm-button";
+import { EnvoiEmailButton } from "@/components/envoi-email-button";
 import { Field } from "@/components/forms/field";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -30,6 +31,7 @@ export function DevisActions({
   droits,
   jourParDefaut,
   clientEmail,
+  clientNom = "Le client",
   penuries = [],
   priseEnCompteSeuil = true,
 }: {
@@ -40,6 +42,7 @@ export function DevisActions({
   droits: { valider: boolean; rouvrir: boolean; modifier: boolean };
   jourParDefaut: string;
   clientEmail: string | null;
+  clientNom?: string;
   /** Pièces dont le stock est insuffisant : alerte affichée, la validation reste possible. */
   penuries?: Penurie[];
   priseEnCompteSeuil?: boolean;
@@ -56,22 +59,7 @@ export function DevisActions({
   const mecanique = type === "MECANIQUE";
   const enAttente = statut === "ENVOYE" || statut === "BROUILLON";
 
-  async function envoyerParEmail() {
-    if (!clientEmail) {
-      toast.error("Ce client n'a pas d'adresse e-mail : ajoutez-la sur sa fiche.");
-      return;
-    }
-    setPending(true);
-    try {
-      await api(`/api/devis/${id}/envoyer`, "POST");
-      toast.success(`Devis envoyé à ${clientEmail}`);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
-    } finally {
-      setPending(false);
-    }
-  }
+
 
   async function valider() {
     setErreur(null);
@@ -122,10 +110,8 @@ export function DevisActions({
         PDF
       </a>
       {enAttente && droits.modifier && (
-        <Button variant="outline" onClick={envoyerParEmail} disabled={pending}>
-          <Mail aria-hidden />
-          Envoyer par e-mail
-        </Button>
+        // Envoi toujours confirmé : destinataire affiché avant de partir.
+        <EnvoiEmailButton label="Envoyer par e-mail" sujet="Devis" url={`/api/devis/${id}/envoyer`} client={clientNom} email={clientEmail} />
       )}
       {enAttente && droits.valider && (
         <>

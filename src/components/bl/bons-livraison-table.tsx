@@ -19,6 +19,7 @@ export interface BlRow {
   numero: string;
   clientId: string | null;
   clientNom: string;
+  clientEmail: string | null;
   devis: { id: string; numero: string } | null;
   facture: { id: string; numero: string } | null;
   pieces: string;
@@ -76,7 +77,7 @@ function colonnesBl({ peutModifier, peutFacturer }: { peutModifier: boolean; peu
             <a href={`/api/bons-livraison/${r.id}/pdf`} target="_blank" rel="noopener" className="text-xs text-link hover:underline">
               PDF
             </a>
-            {peutModifier && r.statut === "LIVREE" && <BlRenvoyerButton id={r.id} />}
+            {peutModifier && r.statut === "LIVREE" && <BlRenvoyerButton id={r.id} numero={r.numero} client={r.clientNom} email={r.clientEmail} />}
             {peutModifier && r.statut === "EN_ATTENTE" && <BlStatutButton id={r.id} action="prete" />}
             {peutModifier && r.statut === "PRETE" && <BlStatutButton id={r.id} action="livre" />}
           </div>

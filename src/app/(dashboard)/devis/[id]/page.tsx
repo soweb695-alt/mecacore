@@ -55,6 +55,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
         mecaniciens={mecaniciens.map((m) => ({ id: m.id, nom: `${m.firstName} ${m.lastName}` }))}
         droits={{ valider: can(user, "validate", "devis"), rouvrir: can(user, "delete", "devis"), modifier: can(user, "update", "devis") }}
         clientEmail={d.client.email}
+        clientNom={nomClient(d.client)}
         jourParDefaut={jourParis()}
         penuries={penuries}
         priseEnCompteSeuil={d.priseEnCompteSeuil}
@@ -101,6 +102,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
             lignes: d.lignes.map((l) => ({
               type: l.type,
               designation: l.designation,
+              description: l.description ?? "",
               quantite: String(l.quantite),
               prixUnitaireHT: String(l.prixUnitaireHT),
               prixUnitaireTTC: l.prixUnitaireTTC,
@@ -139,6 +141,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                   <TableRow key={l.id}>
                     <TableCell>
                       {l.designation}
+                      {l.description && <div className="whitespace-pre-line text-xs text-muted-foreground">{l.description}</div>}
                       <div className="text-xs text-muted-foreground">{LABELS.typeLigne[l.type]}</div>
                       {l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: l.prixUnitaireHT, prixCatalogueHT: l.prixCatalogueHT }) > 0 && (
                         <div className="text-xs text-success">

@@ -5,6 +5,8 @@ export const ligneSchema = z
   .object({
     type: z.enum(["MAIN_OEUVRE", "FORFAIT", "PIECE", "FRAIS_DIVERS"]),
     designation: z.string().trim().min(1, "La désignation est requise").max(200),
+    /** Descriptif imprimé sous la désignation (pré-rempli depuis le tarif, modifiable pour ce document). */
+    description: z.string().trim().max(1500, "Descriptif : 1 500 caractères maximum").nullable().optional(),
     quantite: z.number().positive("La quantité doit être positive").max(10000),
     prixUnitaireHT: z.number().min(0, "Prix invalide").max(100000),
     /** Prix unitaire TTC saisi : il fait foi (le HT en est déduit côté serveur). Absent : déduit du HT. */

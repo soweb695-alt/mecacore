@@ -54,9 +54,9 @@ Les mots de passe des comptes initiaux sont lus dans `SEED_ADMIN_PASSWORD`, `SEE
 
 | Route cron | Fréquence | Rôle |
 | --- | --- | --- |
-| `/api/cron/impayes` | lundi matin | E-mail récapitulatif des factures impayées (admin + secrétariat) |
-| `/api/cron/rappels-rdv` | quotidienne | Rappels de rendez-vous J-1 et J-7 (campagnes automatiques) |
 | `/api/cron/retention` | mensuelle | Purge RGPD (messages > 3 ans, clients inactifs > 5 ans) |
+
+Aucun e-mail n'est envoyé automatiquement : `/api/cron/impayes` et `/api/cron/rappels-rdv` répondent sans rien envoyer (les rappels de rendez-vous se valident depuis le tableau de bord, les impayés se suivent dans Relances).
 
 ## Documentation
 

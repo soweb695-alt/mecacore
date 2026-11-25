@@ -78,7 +78,7 @@ export default async function CampagnesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rappels automatiques de rendez-vous</CardTitle>
+          <CardTitle>Rappels de rendez-vous</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1.5 text-sm">
           {automatiques.map((a) => (
@@ -89,7 +89,7 @@ export default async function CampagnesPage() {
               <StatusBadge tone={a.actif ? "ok" : "neutral"}>{a.actif ? "Actif" : "Désactivé"}</StatusBadge>
             </div>
           ))}
-          <p className="pt-1 text-xs text-muted-foreground">Envoyés chaque jour par la tâche planifiée, à tous les clients concernés (messages de service, hors campagnes).</p>
+          <p className="pt-1 text-xs text-muted-foreground">Proposés chaque jour sur le tableau de bord (« Rappels de rendez-vous à envoyer ») : rien ne part sans votre validation.</p>
         </CardContent>
       </Card>
     </>

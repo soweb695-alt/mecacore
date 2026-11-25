@@ -420,7 +420,8 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await page.getByRole("link", { name: "Nouvelle facture" }).click();
   await page.getByLabel("Rechercher un client", { exact: true }).fill("Sophie");
   await page.getByRole("option", { name: /Sophie Leroy/ }).click();
-  await page.getByRole("button", { name: "Main d'œuvre" }).click();
+  // Main d'œuvre : un tarif existe, la liste propose aussi une ligne libre.
+  await page.locator('select[aria-label="Ajouter : Main d\'œuvre"]').selectOption("__libre");
   await page.getByLabel("Désignation").fill("Diagnostic électronique");
   await page.getByLabel("PU HT (€)").fill("100");
   await page.getByLabel("Remise globale").fill("10");
@@ -638,4 +639,22 @@ test("20. Paramètres : facturation, modèle d'e-mail avec variable, catégories
   await expect(page.getByText("Bons de commande", { exact: true })).toBeVisible();
   const titres = await page.locator("[data-slot=card-title]").allTextContents();
   expect(titres.findIndex((t) => t.startsWith("Bons de livraison"))).toBeLessThan(titres.findIndex((t) => t.startsWith("Bons de commande")));
+});
+
+test("21. devis : descriptif d'une ligne de tarif, modifiable et conservé", async ({ page }) => {
+  await login(page, E2E.secretariat.email, E2E.secretariat.password);
+  await page.goto("/devis/nouveau");
+  await page.getByLabel("Type de devis").selectOption("PIECE");
+  await page.getByLabel("Rechercher un client", { exact: true }).fill("Sophie");
+  await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
+  await page.locator('select[aria-label="Ajouter : Main d\'œuvre"]').selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Ajouter un descriptif" }).click();
+  await page.getByLabel(/Descriptif de/).fill("Diagnostic complet du circuit de freinage.\nEssai routier inclus.");
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
+  await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
+  await expect(page.getByLabel(/Descriptif de/)).toHaveValue("Diagnostic complet du circuit de freinage.\nEssai routier inclus.");
+  // L'envoi par e-mail demande toujours une confirmation.
+  await page.getByRole("button", { name: "Envoyer par e-mail" }).click();
+  await expect(page.getByRole("dialog").getByText(/Envoyer « Devis » \?/)).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Annuler" }).click();
 });

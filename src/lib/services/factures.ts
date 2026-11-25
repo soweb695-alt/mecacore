@@ -48,6 +48,7 @@ function copieLigneDevis(l: LigneDevisCopiee) {
   return {
     type: l.type,
     designation: l.designation,
+    description: l.description,
     quantite: l.quantite,
     prixUnitaireHT: l.prixUnitaireHT,
     prixUnitaireTTC: l.prixUnitaireTTC,
@@ -144,6 +145,7 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
             return {
               type: l.type,
               designation: l.designation,
+              description: l.description?.trim() || null,
               quantite: l.quantite,
               ...prixLigne(l),
               prixCatalogueHT: l.type === "PIECE" ? (l.prixCatalogueHT ?? null) : null,
@@ -199,7 +201,6 @@ export async function emettreBrouillon(id: string, userId: string) {
     if (f.devis?.ordre) await cloturerOrdre(tx, f.devis.ordre.id, userId);
     return { id, numero };
   });
-  await transmettreFacture(facture.id);
   return facture;
 }
 
@@ -236,7 +237,6 @@ export async function creerFactureDepuisDevis(devisId: string, userId?: string, 
     if (devis.ordre) await cloturerOrdre(tx, devis.ordre.id, userId);
     return f;
   });
-  await transmettreFacture(facture.id); // hors transaction : un échec de la PA ne bloque pas la facture
   return { id: facture.id, numero: facture.numero };
 }
 
@@ -268,11 +268,11 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
     }
 
     const remisePct = client.type === "PRO" ? Number(client.discountRate) : 0;
-    const lignes: { type: "MAIN_OEUVRE" | "FORFAIT" | "PIECE" | "FRAIS_DIVERS"; designation: string; quantite: number; prixUnitaireHT: number; prixUnitaireTTC?: number | null; prixCatalogueHT: number | null; tvaRate: number; prixAchatHT: number | null; pieceId: string | null; composition?: Prisma.InputJsonValue }[] = [];
+    const lignes: { type: "MAIN_OEUVRE" | "FORFAIT" | "PIECE" | "FRAIS_DIVERS"; designation: string; description?: string | null; quantite: number; prixUnitaireHT: number; prixUnitaireTTC?: number | null; prixCatalogueHT: number | null; tvaRate: number; prixAchatHT: number | null; pieceId: string | null; composition?: Prisma.InputJsonValue }[] = [];
     for (const b of bons) {
       if (b.devis) {
         for (const l of b.devis.lignes) {
-          lignes.push({ type: l.type, designation: l.designation, quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null, tvaRate: Number(l.tvaRate), prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId, composition: (l.composition as Prisma.InputJsonValue | null) ?? undefined });
+          lignes.push({ type: l.type, designation: l.designation, description: l.description, quantite: Number(l.quantite), prixUnitaireHT: Number(l.prixUnitaireHT), prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null, tvaRate: Number(l.tvaRate), prixAchatHT: l.piece ? Number(l.piece.prixAchatHT) : null, pieceId: l.pieceId, composition: (l.composition as Prisma.InputJsonValue | null) ?? undefined });
         }
       } else {
         for (const l of b.lignes) {
@@ -308,7 +308,6 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
     if (r.count !== ids.length) throw new ApiError(409, "Un bon de livraison vient d'être facturé", "DEJA_FACTURE");
     return f;
   });
-  await transmettreFacture(facture.id);
   return { id: facture.id, numero: facture.numero };
 }
 
@@ -358,6 +357,7 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
           create: input.lignes.map((l, i) => ({
             type: l.type,
             designation: l.designation,
+            description: l.description?.trim() || null,
             quantite: l.quantite,
             ...prixLigne(l),
             prixCatalogueHT: l.type === "PIECE" ? (l.prixCatalogueHT ?? null) : null,
@@ -370,11 +370,10 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
       },
     });
   });
-  await transmettreFacture(facture.id);
   return { id: facture.id, numero: facture.numero };
 }
 
-/** Transmission à la Plateforme Agréée (ou mock) et traçage du statut. */
+/** Transmission à la Plateforme Agréée (ou mock) et traçage du statut. Jamais automatique : bouton « Transmettre » de la facture. */
 export async function transmettreFacture(id: string) {
   const f = await db.facture.findUnique({ where: { id }, include: { client: true, lignes: { orderBy: { position: "asc" } } } });
   if (!f) throw new ApiError(404, "Facture introuvable", "INTROUVABLE");

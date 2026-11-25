@@ -157,7 +157,7 @@ Sur Vercel, le disque est en lecture seule : **sans S3, l'ajout d'une photo ou d
 
 ### 3.6 Tâches planifiées
 
-Le fichier `.github/workflows/cron.yml` appelle les tâches (relances, rappels, purge RGPD). Sur GitHub → dépôt `mecacore` → **Settings** → **Secrets and variables** → **Actions** → **New repository secret** :
+Le fichier `.github/workflows/cron.yml` appelle la purge RGPD mensuelle (aucun e-mail n'est envoyé automatiquement). Sur GitHub → dépôt `mecacore` → **Settings** → **Secrets and variables** → **Actions** → **New repository secret** :
 
 - `APP_URL` = votre adresse Vercel
 - `CRON_SECRET` = la même valeur que dans Vercel

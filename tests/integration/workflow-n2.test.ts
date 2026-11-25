@@ -77,23 +77,34 @@ describe("bons de livraison : prêt → livré", () => {
   });
 });
 
-describe("envoi automatique du BL au passage « Livré »", () => {
-  async function blPret() {
+describe("envoi du BL : jamais automatique, toujours à la main", () => {
+  async function blLivre() {
     const { id } = await devisPieces(b.p1.id);
     await validerDevis(id);
     const bl = await db.bonLivraison.findUniqueOrThrow({ where: { devisId: id } });
     await marquerPrete(bl.id);
+    await marquerLivre(bl.id);
     return bl;
   }
 
-  it("envoie le PDF (sans prix) au client et trace l'envoi dans son historique", async () => {
+  it("le passage « Livré » n'envoie aucun e-mail", async () => {
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
     vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
-    const bl = await blPret();
-    const r = await marquerLivre(bl.id);
-    expect(r.email).toEqual({ resultat: "envoye", destinataire: "j@d.fr" });
+    const bl = await blLivre();
+    expect((await db.bonLivraison.findUniqueOrThrow({ where: { id: bl.id } })).statut).toBe("LIVREE");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await db.messageLog.count()).toBe(0);
+  });
+
+  it("« Envoyer le BL » envoie le PDF (sans prix) au client et trace l'envoi dans son historique", async () => {
+    vi.stubEnv("BREVO_API_KEY", "cle-brevo");
+    vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const bl = await blLivre();
+    expect(await envoyerBonLivraisonParEmail(bl.id)).toEqual({ resultat: "envoye", destinataire: "j@d.fr" });
     const corps = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(corps.attachment[0].name).toBe(`${bl.numero}.pdf`);
     expect(Buffer.from(corps.attachment[0].content, "base64").subarray(0, 4).toString()).toBe("%PDF");
@@ -101,33 +112,18 @@ describe("envoi automatique du BL au passage « Livré »", () => {
     expect(log).toMatchObject({ clientId: b.client.id, canal: "EMAIL", statut: "ENVOYE", destinataire: "j@d.fr" });
   });
 
-  it("le BL passe « Livré » même si Brevo n'est pas configuré, avec un résultat explicite", async () => {
+  it("résultat explicite si Brevo n'est pas configuré, en échec, ou si le client n'a pas d'e-mail", async () => {
+    const bl = await blLivre();
     vi.stubEnv("BREVO_API_KEY", "");
-    const bl = await blPret();
-    const r = await marquerLivre(bl.id);
-    expect(r.email.resultat).toBe("non_configure");
-    expect((await db.bonLivraison.findUniqueOrThrow({ where: { id: bl.id } })).statut).toBe("LIVREE");
-  });
-
-  it("le BL passe « Livré » si l'envoi échoue, et peut être renvoyé ensuite", async () => {
+    expect((await envoyerBonLivraisonParEmail(bl.id)).resultat).toBe("non_configure");
     vi.stubEnv("BREVO_API_KEY", "cle-brevo");
     vi.stubEnv("BREVO_SENDER_EMAIL", "garage@example.com");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
-    const bl = await blPret();
-    expect((await marquerLivre(bl.id)).email.resultat).toBe("echec");
-    expect((await db.bonLivraison.findUniqueOrThrow({ where: { id: bl.id } })).statut).toBe("LIVREE");
+    expect((await envoyerBonLivraisonParEmail(bl.id)).resultat).toBe("echec");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     expect((await envoyerBonLivraisonParEmail(bl.id)).resultat).toBe("envoye");
-    expect(await db.messageLog.count({ where: { template: "bon_livraison" } })).toBe(2); // une trace par tentative
-  });
-
-  it("signale un client sans adresse e-mail sans bloquer la livraison", async () => {
     await db.client.update({ where: { id: b.client.id }, data: { email: null } });
-    const bl = await blPret();
-    const r = await marquerLivre(bl.id);
-    expect(r.email).toEqual({ resultat: "sans_email", destinataire: null });
-    expect((await db.bonLivraison.findUniqueOrThrow({ where: { id: bl.id } })).statut).toBe("LIVREE");
-    expect(await db.messageLog.count()).toBe(0);
+    expect(await envoyerBonLivraisonParEmail(bl.id)).toEqual({ resultat: "sans_email", destinataire: null });
   });
 });
 
@@ -153,7 +149,8 @@ describe("facturation groupée des bons de livraison", () => {
     expect(Number(facture.totalHT)).toBe(70);
     expect(Number(facture.totalTTC)).toBe(84);
     expect(facture.lignes.every((l) => l.pieceId)).toBe(true);
-    expect(facture.statutPA).toContain("simulation");
+    // Facture électronique : jamais transmise automatiquement.
+    expect(facture.statutPA).toBeNull();
   });
 
   it("refuse un bon non livré, déjà facturé ou d'un autre client", async () => {

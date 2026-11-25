@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ClientForm, type ClientCree } from "@/components/clients/client-form";
 import { VehiculeForm, type VehiculeSaved } from "@/components/clients/vehicule-form";
+import { DescriptifLigne } from "@/components/devis/descriptif-ligne";
 import { NouvellePieceDialog, type PieceCreee } from "@/components/devis/nouvelle-piece-dialog";
 import { SearchPicker } from "@/components/devis/search-picker";
 import { apercu, OptionsFactureFields, remiseDepuisState, stateDepuisRemise, type OptionsFactureState } from "@/components/factures/options-facture";
@@ -26,6 +27,8 @@ interface LigneState {
   key: string;
   type: TypeLigne;
   designation: string;
+  /** Descriptif imprimé sous la ligne (pré-rempli depuis le tarif, modifiable). */
+  description?: string;
   quantite: string;
   /** Prix unitaire HT, modifiable : sa saisie recalcule le TTC. */
   prixUnitaireHT: string;
@@ -85,6 +88,8 @@ interface Tarif {
   type: string;
   libelle: string;
   montantHT: number;
+  /** Descriptif du tarif, recopié sur la ligne (modifiable pour ce devis). */
+  description?: string | null;
   pieces?: { reference: string; nom: string; quantite: number }[];
 }
 
@@ -161,6 +166,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
   const [seuil, setSeuil] = useState(initial.priseEnCompteSeuil ?? true);
   const [remiseGlobale, setRemiseGlobale] = useState<OptionsFactureState>(() => stateDepuisRemise(initial.remise ?? null));
   const [nouvellePiece, setNouvellePiece] = useState(false);
+  const [confirmEnvoi, setConfirmEnvoi] = useState(false);
   const [saving, setSaving] = useState<"brouillon" | "envoi" | null>(null);
 
   const remise = client?.type === "PRO" ? client.discountRate : 0;
@@ -238,7 +244,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
     if (!tarif) return;
     setLignes((ls) => [
       ...ls,
-      { key: nouvelleCle(), type: t, designation: tarif.libelle, quantite: "1", ...avecHT(tarif.montantHT, TVA), tvaRate: String(TVA), pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true, tarifId: t === "FORFAIT" ? tarif.id : null, piecesComprises: t === "FORFAIT" ? tarif.pieces : undefined },
+      { key: nouvelleCle(), type: t, designation: tarif.libelle, description: tarif.description ?? "", quantite: "1", ...avecHT(tarif.montantHT, TVA), tvaRate: String(TVA), pieceId: null, stock: null, prixCatalogueHT: null, prixManuel: true, tarifId: t === "FORFAIT" ? tarif.id : null, piecesComprises: t === "FORFAIT" ? tarif.pieces : undefined },
     ]);
   }
 
@@ -322,6 +328,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
       lignes: lignes.map((l) => ({
         type: l.type,
         designation: l.designation,
+        description: l.description?.trim() || null,
         quantite: num(l.quantite),
         prixUnitaireHT: num(l.prixUnitaireHT),
         prixUnitaireTTC: num(l.prixTTC),
@@ -566,6 +573,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                       <td className="px-2 py-2 text-xs text-muted-foreground">{TYPE_LABEL[l.type]}</td>
                       <td className="px-2 py-1.5">
                         <Input aria-label="Désignation" value={l.designation} maxLength={200} onChange={(e) => maj(l.key, { designation: e.target.value })} />
+                        <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} />
                         {alerte && <p className={alerte.niveau === "rupture" ? "mt-1 text-xs text-destructive" : "mt-1 text-xs text-warning"}>{alerte.texte}</p>}
                         {l.piecesComprises && l.piecesComprises.length > 0 && (
                           <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
@@ -660,12 +668,40 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
           {saving === "brouillon" ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
           Enregistrer en brouillon
         </Button>
-        <Button type="button" onClick={() => enregistrer("envoi")} disabled={saving !== null}>
+        <Button type="button" onClick={() => setConfirmEnvoi(true)} disabled={saving !== null}>
           {saving === "envoi" ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
           {statut === "ENVOYE" ? "Enregistrer et renvoyer" : "Enregistrer et envoyer"}
         </Button>
       </div>
       {statut === "ENVOYE" && <p className="text-right text-xs text-muted-foreground">Ce devis a déjà été envoyé : « Enregistrer en brouillon » le repasse en brouillon, à renvoyer au client.</p>}
+
+      {/* Aucun envoi sans confirmation. */}
+      <Dialog open={confirmEnvoi} onOpenChange={setConfirmEnvoi}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enregistrer et envoyer le devis ?</DialogTitle>
+            <DialogDescription>
+              Le devis sera enregistré puis envoyé en PDF par e-mail {client ? `à ${client.nom}` : "au client"}. Pour seulement l&apos;enregistrer, choisissez « Enregistrer en brouillon ».
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmEnvoi(false)}>
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              disabled={saving !== null}
+              onClick={() => {
+                setConfirmEnvoi(false);
+                void enregistrer("envoi");
+              }}
+            >
+              <Send aria-hidden />
+              Enregistrer et envoyer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <NouvellePieceDialog open={nouvellePiece} onOpenChange={setNouvellePiece} voirAchat={voirAchat} voirMarge={voirMarges} onCreee={ajouterPiece} />
 
