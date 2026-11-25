@@ -143,6 +143,10 @@ export const LIBELLES_AFFICHAGE_REMISE: Record<AffichageRemiseCle, string> = {
 export const MENTIONS_FACTURE_DEFAUT =
   "En cas de retard de paiement, une indemnité forfaitaire de 40 € pour frais de recouvrement sera exigible (art. L441-10 du Code de commerce), ainsi que des pénalités au taux de trois fois le taux d'intérêt légal. Pas d'escompte pour paiement anticipé.";
 
+/** Mention imprimée au-dessus de la signature du client sur l'ordre de réparation, tant que le garage n'a pas saisi la sienne. */
+export const MENTION_ACCORD_OR_DEFAUT =
+  "Bon pour accord. J'autorise le garage à effectuer les travaux décrits ci-dessus et à procéder aux essais nécessaires.";
+
 const prefixe = (nom: string) =>
   z
     .string()
@@ -158,6 +162,7 @@ export const facturationSchema = z
     prefixFacture: prefixe("facture"),
     prefixBonLivraison: prefixe("bon de livraison"),
     mentionsFacture: z.string().trim().max(3000, "3 000 caractères maximum"),
+    mentionAccordOR: z.string().trim().max(1000, "1 000 caractères maximum"),
     affichageRemise: z.enum(AFFICHAGES_REMISE),
   })
   .refine((v) => new Set([v.prefixDevis, v.prefixFacture, v.prefixBonLivraison]).size === 3, { path: ["prefixFacture"], message: "Les trois préfixes doivent être différents" });

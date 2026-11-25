@@ -50,6 +50,7 @@ const facturation = {
   prefixFacture: "FA",
   prefixBonLivraison: "LIV",
   mentionsFacture: "CGV : paiement à réception.\nPénalités : 3 fois le taux légal.",
+  mentionAccordOR: "Bon pour accord. Gardiennage facturé après 48 h.",
   affichageRemise: "LIGNE",
 };
 
@@ -69,6 +70,7 @@ describe("Paramètres › Facturation", () => {
     const g = await db.parametreGarage.findUniqueOrThrow({ where: { id: 1 } });
     expect(g).toMatchObject({ modesPaiement: ["CB", "VIREMENT"], delaiPaiementDefaut: 15, prefixDevis: "DV", prefixFacture: "FA", prefixBonLivraison: "LIV", affichageRemise: "LIGNE" });
     expect(g.mentionsFacture).toContain("CGV");
+    expect(g.mentionAccordOR).toBe("Bon pour accord. Gardiennage facturé après 48 h.");
     const { numero } = await creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [ligne(b.p1.id, 1)] });
     expect(numero).toMatch(/^DV-\d{4}-0001$/);
     expect(await parametresClient()).toMatchObject({ modesPaiement: ["CB", "VIREMENT"], delaiPaiementDefaut: 15 });

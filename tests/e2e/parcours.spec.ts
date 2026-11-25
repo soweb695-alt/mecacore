@@ -325,6 +325,15 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
     return (await fetch(`/api/ordres-reparation/${id}/signature`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) })).status;
   });
   expect(signe).toBe(200);
+  // PDF de l'OR : l'atelier n'a que la version sans prix.
+  await page.reload();
+  await expect(page.getByRole("link", { name: "PDF de l'OR" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "PDF avec prix" })).toHaveCount(0);
+  const pdfOr = await page.evaluate(async () => {
+    const r = await fetch(`/api/ordres-reparation/${location.pathname.split("/").pop()}/pdf?prix=1`);
+    return { status: r.status, type: r.headers.get("content-type") };
+  });
+  expect(pdfOr).toEqual({ status: 200, type: "application/pdf" });
   await page.reload();
   await page.getByRole("button", { name: "Démarrer les travaux" }).click();
   await expect(page.getByText("Travaux démarrés")).toBeVisible();
@@ -377,6 +386,8 @@ test("12. OR : travaux, fiche de contrôle et kilométrage par l'atelier, puis f
   await expect(page.getByText("84 350 km")).toBeVisible();
   // Vérification du responsable : signature du Magasin, puis impression de la fiche.
   await page.getByRole("link", { name: numeroOr }).click();
+  await expect(page.getByRole("link", { name: "PDF avec prix" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "PDF sans prix" })).toBeVisible();
   await page.getByLabel("Signature du responsable").scrollIntoViewIfNeeded();
   const zoneResp = (await page.getByLabel("Signature du responsable").boundingBox())!;
   await page.mouse.move(zoneResp.x + 20, zoneResp.y + 30);

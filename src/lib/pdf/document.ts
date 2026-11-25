@@ -42,6 +42,11 @@ export interface PdfDocData {
   sansPrix?: boolean;
   /** Devis : colonnes « PU TTC » et « Total TTC » par ligne (le PU HT reste affiché, les totaux HT / TVA / TTC aussi). */
   prixTTC?: boolean;
+  /**
+   * Ordre de réparation : bloc « Bon pour accord » en fin de document (mention, nom, date et image de la signature du
+   * client). Sans image : cadre vide à signer sur papier.
+   */
+  signature?: { mention: string; nom: string; le: Date | null; image: Uint8Array | null };
 }
 
 /** Prix TTC d'un montant HT, arrondi au centime. */
@@ -144,7 +149,7 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
 
   // ================= Client, véhicule, dates =================
   const lc = (W - 2 * M) / 3;
-  libelle(page, d.titre.startsWith("Devis") ? "Établi pour" : d.sansPrix ? "Livré à" : "Facturé à", M, y);
+  libelle(page, d.titre.startsWith("Devis") ? "Établi pour" : d.titre.startsWith("Ordre") ? "Client" : d.sansPrix ? "Livré à" : "Facturé à", M, y);
   text(page, d.client.nom, M, y - 15, { size: 10, f: bold });
   [d.client.adresse, d.client.email, d.client.siret ? `SIRET ${d.client.siret}` : null]
     .filter((l): l is string => !!l)
@@ -291,6 +296,49 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
       }
       y -= 2;
     }
+  }
+
+  // ================= Bon pour accord (signature du client) =================
+  if (d.signature) {
+    const s = d.signature;
+    const mention = wrap(s.mention, font, 8.5, W - 2 * M);
+    const hCadre = 92;
+    const besoin = 22 + mention.length * 11 + 14 + hCadre;
+    if (y - besoin < 46) {
+      page = pdf.addPage([W, H]);
+      y = H - M;
+    }
+    y -= 8;
+    libelle(page, "Bon pour accord du client", M, y);
+    y -= 15;
+    for (const l of mention) {
+      text(page, l, M, y, { size: 8.5 });
+      y -= 11;
+    }
+    y -= 6;
+    // À gauche : nom et date ; à droite : cadre de signature.
+    const wCadre = 230;
+    const xCadre = W - M - wCadre;
+    text(page, "Nom du client", M, y - 10, { size: 7.5, color: GRIS });
+    text(page, s.nom, M, y - 23, { size: 10, f: bold });
+    text(page, "Signé le", M, y - 42, { size: 7.5, color: GRIS });
+    const quand = s.le ? new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long", timeStyle: "short" }).format(s.le) : "____ / ____ / ________";
+    text(page, quand, M, y - 55, { size: 10 });
+    page.drawRectangle({ x: xCadre, y: y - hCadre, width: wCadre, height: hCadre, borderColor: FILET, borderWidth: 0.8 });
+    text(page, "Signature", xCadre + 8, y - 12, { size: 7, color: GRIS_CLAIR });
+    let signee = false;
+    if (s.image) {
+      try {
+        const img = await pdf.embedPng(s.image);
+        const k = Math.min((wCadre - 20) / img.width, (hCadre - 22) / img.height);
+        page.drawImage(img, { x: xCadre + (wCadre - img.width * k) / 2, y: y - hCadre + 6 + (hCadre - 22 - img.height * k) / 2, width: img.width * k, height: img.height * k });
+        signee = true;
+      } catch {
+        // Image illisible : le cadre reste vide.
+      }
+    }
+    if (!signee) text(page, "Non signé : à signer à la remise du véhicule", xCadre + 8, y - hCadre + 8, { size: 7, color: GRIS_CLAIR });
+    y -= hCadre + 10;
   }
 
   // Pied de page
