@@ -4,6 +4,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { DescriptifLigne } from "@/components/devis/descriptif-ligne";
 import { SearchPicker } from "@/components/devis/search-picker";
 import { apercu, OptionsFactureFields, optionsInitiales, payloadOptions, type OptionsFactureState } from "@/components/factures/options-facture";
 import { Field } from "@/components/forms/field";
@@ -24,6 +25,8 @@ interface Ligne {
   composition?: string;
   type: TypeLigne;
   designation: string;
+  /** Descriptif imprimé sous la ligne (pré-rempli depuis le tarif, modifiable). */
+  description?: string;
   quantite: string;
   prixUnitaireHT: string;
   /** PU TTC : fait foi pour les totaux ; modifier le HT ou le TTC recalcule l'autre. */
@@ -61,6 +64,15 @@ const num = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(",", ".")));
 const avecHT = (ht: number, taux = 20) => ({ prixUnitaireHT: String(ht), prixTTC: String(prixTTCDepuisHT(ht, taux)) });
 const nomClientHit = (c: ClientHit) => (c.type === "PRO" && c.companyName ? c.companyName : [c.firstName, c.lastName].filter(Boolean).join(" "));
 
+/** Tarif proposé à l'ajout d'une ligne (forfait, main d'œuvre, frais divers). */
+export interface TarifLite {
+  id: string;
+  type: string;
+  libelle: string;
+  description: string | null;
+  montantHT: number;
+}
+
 export interface BrouillonInitial {
   id: string;
   client: { id: string; nom: string; pro: boolean; remisePct: number };
@@ -72,7 +84,7 @@ export interface BrouillonInitial {
  * Facture saisie directement (sans devis ni bon de livraison) : les pièces du stock sont décrémentées à l'émission.
  * Avec `brouillon` : modification de la facture préparée à la fin d'un OR, puis émission (numéro attribué à ce moment).
  */
-export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefaut: string; brouillon?: BrouillonInitial }) {
+export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { echeanceParDefaut: string; brouillon?: BrouillonInitial; tarifs?: TarifLite[] }) {
   const router = useRouter();
   const [client, setClient] = useState<{ id: string; nom: string; pro: boolean; remisePct: number } | null>(brouillon?.client ?? null);
   const [lignes, setLignes] = useState<Ligne[]>(() => (brouillon?.lignes ?? []).map(({ prixUnitaireTTC, ...l }) => ({ ...l, key: cle(), prixTTC: String(prixUnitaireTTC ?? prixTTCDepuisHT(num(l.prixUnitaireHT), num(l.tvaRate))) })));
@@ -89,6 +101,12 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
 
   const maj = (k: string, p: Partial<Ligne>) => setLignes((ls) => ls.map((l) => (l.key === k ? { ...l, ...p } : l)));
   const ajouterLibre = (type: TypeLigne) => setLignes((ls) => [...ls, { key: cle(), type, designation: "", quantite: "1", ...avecHT(0), tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null }]);
+  /** Tarif choisi (ex. forfait vidange) : libellé, prix et descriptif recopiés, tous modifiables pour cette facture. */
+  const ajouterTarif = (type: TypeLigne, id: string) => {
+    const t = tarifs.find((x) => x.id === id);
+    if (t) setLignes((ls) => [...ls, { key: cle(), type, designation: t.libelle, description: t.description ?? "", quantite: "1", ...avecHT(t.montantHT), tvaRate: "20", pieceId: null, stock: null, prixCatalogueHT: null }]);
+  };
+  const tarifsDe = (type: TypeLigne) => tarifs.filter((x) => (type === "MAIN_OEUVRE" ? x.type.startsWith("MO") : x.type === type));
   const ajouterPiece = (p: PieceHit) =>
     setLignes((ls) => [
       ...ls,
@@ -116,6 +134,7 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
           ...(l.id ? { id: l.id } : {}),
           type: l.type,
           designation: l.designation.trim(),
+          description: l.description?.trim() || null,
           quantite: num(l.quantite),
           prixUnitaireHT: num(l.prixUnitaireHT),
           prixUnitaireTTC: num(l.prixTTC),
@@ -216,6 +235,9 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
               <Field label="Désignation" htmlFor={`des-${l.key}`} className="col-span-2 md:col-span-1" hint={l.composition}>
                 <Input id={`des-${l.key}`} maxLength={200} value={l.designation} onChange={(e) => maj(l.key, { designation: e.target.value })} />
               </Field>
+              <div className="col-span-full -mt-1 md:order-last">
+                <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} />
+              </div>
               <Field label="Qté" htmlFor={`qte-${l.key}`} hint={l.stock !== null ? `Stock : ${l.stock}` : undefined}>
                 <Input id={`qte-${l.key}`} inputMode="decimal" value={l.quantite} onChange={(e) => maj(l.key, { quantite: e.target.value })} />
               </Field>
@@ -234,12 +256,31 @@ export function FactureForm({ echeanceParDefaut, brouillon }: { echeanceParDefau
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
-            {(["MAIN_OEUVRE", "FORFAIT", "FRAIS_DIVERS"] as const).map((t) => (
-              <Button key={t} type="button" variant="outline" size="sm" onClick={() => ajouterLibre(t)}>
-                <Plus aria-hidden />
-                {TYPES[t]}
-              </Button>
-            ))}
+            {(["FORFAIT", "MAIN_OEUVRE", "FRAIS_DIVERS"] as const).map((t) =>
+              tarifsDe(t).length > 0 ? (
+                // Tarifs du type (forfait vidange…) ou ligne libre.
+                <NativeSelect
+                  key={t}
+                  aria-label={`Ajouter : ${TYPES[t]}`}
+                  className="h-8 w-48 text-xs"
+                  value=""
+                  onChange={(e) => (e.target.value === "__libre" ? ajouterLibre(t) : e.target.value && ajouterTarif(t, e.target.value))}
+                >
+                  <option value="">+ {TYPES[t]}</option>
+                  {tarifsDe(t).map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.libelle} ({formatEUR(x.montantHT)} HT)
+                    </option>
+                  ))}
+                  <option value="__libre">Ligne libre…</option>
+                </NativeSelect>
+              ) : (
+                <Button key={t} type="button" variant="outline" size="sm" onClick={() => ajouterLibre(t)}>
+                  <Plus aria-hidden />
+                  {TYPES[t]}
+                </Button>
+              ),
+            )}
           </div>
         </CardContent>
       </Card>

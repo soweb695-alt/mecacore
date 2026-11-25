@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
-import { creerFactureDepuisDevis, enregistrerPaiement, envoyerRapportImpayes, rafraichirStatuts } from "@/lib/services/factures";
+import { creerFactureDepuisDevis, enregistrerPaiement, envoyerRapportImpayes, rafraichirStatuts, transmettreFacture } from "@/lib/services/factures";
 import { creneau, ligne, resetDb, seedBase } from "./helpers";
 
 let b: Awaited<ReturnType<typeof seedBase>>;
@@ -29,7 +29,9 @@ describe("facturation", () => {
     expect(f.lignes).toHaveLength(2);
     expect(Number(f.totalTTC)).toBe(240);
     expect(f.statut).toBe("EMISE");
-    expect(f.statutPA).toContain("simulation");
+    // Facture électronique : aucune transmission automatique ; « Transmettre » à la main.
+    expect(f.statutPA).toBeNull();
+    expect((await transmettreFacture(id)).statutPA).toContain("simulation");
     const jours = Math.round((f.dateEcheance.getTime() - f.dateEmission.getTime()) / 864e5);
     expect(jours).toBe(30);
     // prix d'achat conservé pour le calcul de marge

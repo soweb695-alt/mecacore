@@ -107,8 +107,8 @@ export async function envoyerBonLivraisonParEmail(id: string): Promise<{ resulta
 }
 
 /**
- * Prêt à être retiré → Livré : confirme que le client a récupéré ses pièces, puis envoie automatiquement
- * le bon de livraison par e-mail. Le passage à « Livré » n'est jamais bloqué par l'envoi.
+ * Prêt à être retiré → Livré : confirme que le client a récupéré ses pièces.
+ * Aucun e-mail n'est envoyé automatiquement : le bon de livraison s'envoie avec « Envoyer le BL », après confirmation.
  */
 export async function marquerLivre(id: string) {
   const r = await db.bonLivraison.updateMany({ where: { id, statut: "PRETE" }, data: { statut: "LIVREE", livreLe: new Date() } });
@@ -117,8 +117,7 @@ export async function marquerLivre(id: string) {
     if (!bl) throw new ApiError(404, "Bon de livraison introuvable", "INTROUVABLE");
     throw new ApiError(409, "Le bon doit d'abord être « Prêt à être retiré »", "STATUT_INVALIDE");
   }
-  const email = await envoyerBonLivraisonParEmail(id).catch(() => ({ resultat: "echec" as const, destinataire: null }));
-  return { id, email };
+  return { id };
 }
 
 /** Un bon de commande n'est modifiable ou supprimable que tant qu'aucune pièce n'a été reçue. */

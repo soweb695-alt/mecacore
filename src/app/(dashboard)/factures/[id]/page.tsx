@@ -19,6 +19,7 @@ import { round2 } from "@/lib/money";
 import { can, canSeeMargins } from "@/lib/permissions";
 import { rafraichirStatuts } from "@/lib/services/factures";
 import { montantRemise, tauxRemiseLigne } from "@/lib/remise";
+import { tarifsActifs } from "@/lib/services/tarifs";
 import { requirePage } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
         {can(user, "update", "facture") ? (
           <FactureForm
             echeanceParDefaut={f.dateEcheance.toISOString().slice(0, 10)}
+            tarifs={await tarifsActifs()}
             brouillon={{
               id: f.id,
               client: { id: f.clientId, nom: nomClient(f.client), pro: f.client.type === "PRO", remisePct },
@@ -85,6 +87,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                 id: l.id,
                 type: l.type,
                 designation: l.designation,
+                description: l.description ?? "",
                 quantite: String(Number(l.quantite)),
                 prixUnitaireHT: String(Number(l.prixUnitaireHT)),
                 prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null,
@@ -189,6 +192,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                   <TableRow key={l.id}>
                     <TableCell>
                       {l.designation}
+                      {l.description && <div className="whitespace-pre-line text-xs text-muted-foreground">{l.description}</div>}
                       {l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: Number(l.prixCatalogueHT) }) > 0 && (
                         <div className="text-xs text-success">
                           Catalogue {eur(l.prixCatalogueHT.toString())} · remise pro {tauxRemiseLigne({ prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: Number(l.prixCatalogueHT) })} %
@@ -277,7 +281,16 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
             <CardContent className="space-y-3 text-sm">
               <StatusBadge tone={f.statutPA?.startsWith("ERREUR") ? "danger" : f.statutPA ? "ok" : "neutral"}>{f.statutPA ?? "Non transmise"}</StatusBadge>
               {can(user, "update", "facture") && (
-                <ConfirmButton label="Retransmettre" title="Retransmettre à la Plateforme Agréée ?" description="La facture sera renvoyée et son statut mis à jour." url={`/api/factures/${f.id}/transmettre`} method="POST" success="Facture retransmise" variant="outline" size="sm">
+                <ConfirmButton
+                  label={f.statutPA ? "Retransmettre" : "Transmettre"}
+                  title={f.statutPA ? "Retransmettre à la Plateforme Agréée ?" : "Transmettre à la Plateforme Agréée ?"}
+                  description="La facture est déposée sur la plateforme de facturation électronique et son statut mis à jour. Rien n'est transmis sans cette confirmation."
+                  url={`/api/factures/${f.id}/transmettre`}
+                  method="POST"
+                  success="Facture transmise"
+                  variant="outline"
+                  size="sm"
+                >
                   <Send aria-hidden />
                 </ConfirmButton>
               )}

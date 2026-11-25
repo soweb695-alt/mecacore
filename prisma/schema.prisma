@@ -345,6 +345,8 @@ model LigneDevis {
   devisId         String
   type            TypeLigne
   designation     String
+  /// Descriptif de la ligne (pré-rempli depuis le tarif, modifiable pour ce document), imprimé sous la désignation.
+  description     String?
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
   /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.
@@ -544,6 +546,8 @@ model LigneFacture {
   factureId       String
   type            TypeLigne
   designation     String
+  /// Descriptif de la ligne (pré-rempli depuis le tarif, modifiable pour ce document), imprimé sous la désignation.
+  description     String?
   quantite        Decimal   @db.Decimal(10, 2)
   prixUnitaireHT  Decimal   @db.Decimal(10, 2)
   /// PU TTC saisi : il fait foi (HT et TVA de la ligne en sont déduits). Null : anciennes lignes, déduit du HT.

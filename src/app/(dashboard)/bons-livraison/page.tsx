@@ -19,7 +19,7 @@ export default async function BonsPage() {
   // Bons de livraison d'abord (affichés en premier), puis bons de commande.
   const [bcs, bls] = await Promise.all([
     db.bonCommande.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { lignes: { include: { piece: { select: { reference: true, nom: true } } } } } }),
-    db.bonLivraison.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true } }, devis: { select: { id: true, numero: true } }, facture: { select: { id: true, numero: true } }, lignes: true } }),
+    db.bonLivraison.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { client: { select: { type: true, firstName: true, lastName: true, companyName: true, email: true, anonymiseLe: true } }, devis: { select: { id: true, numero: true } }, facture: { select: { id: true, numero: true } }, lignes: true } }),
   ]);
   const edit = can(user, "update", "bonCommande");
 
@@ -45,6 +45,7 @@ export default async function BonsPage() {
                 numero: b.numero,
                 clientId: b.clientId,
                 clientNom: b.client ? nomClient(b.client) : "–",
+                clientEmail: b.client?.anonymiseLe ? null : (b.client?.email ?? null),
                 devis: b.devis,
                 facture: b.facture ? { id: b.facture.id, numero: b.facture.numero ?? "Brouillon" } : null,
                 pieces: b.lignes.map((l) => `${l.designation || "Pièce"} × ${l.quantite}`).join(", "),

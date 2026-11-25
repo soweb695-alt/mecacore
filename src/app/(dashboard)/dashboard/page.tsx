@@ -11,6 +11,8 @@ import { db } from "@/lib/db";
 import { dansJours, dateLongueFR, eur, heureFR, joursDepuis, nomClient } from "@/lib/format";
 import { can, canSeeMargins } from "@/lib/permissions";
 import { piecesEnAlerte } from "@/lib/services/pieces";
+import { rappelsAEnvoyer } from "@/lib/services/rappels";
+import { RappelsAEnvoyer } from "@/components/rdv/rappels-a-envoyer";
 import { analyser } from "@/lib/services/analyse";
 import { rafraichirStatuts } from "@/lib/services/factures";
 import { requireUser } from "@/lib/session";
@@ -50,6 +52,8 @@ export default async function DashboardPage() {
       select: { id: true, numero: true, devis: { select: { facture: { select: { id: true, statut: true } }, vehicule: { select: { marque: true, modele: true, immatriculation: true } } } } },
     }),
   ]);
+  // Rappels de rendez-vous du jour : jamais envoyés automatiquement, validés ici.
+  const rappels = can(user, "create", "message") ? await rappelsAEnvoyer() : [];
   const totalImpaye = impayes.reduce((s, f) => s + Number(f.totalTTC) - Number(f.montantPaye), 0);
   const nbAlertes = fichesATraiter.length + alertesStock.length + impayes.length + devisEnvoyes.length;
   const marges = canSeeMargins(user);
@@ -192,6 +196,19 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {can(user, "create", "message") && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Rappels de rendez-vous à envoyer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RappelsAEnvoyer
+              rappels={rappels.map((r) => ({ ...r, quand: `${dateLongueFR(r.debut)} à ${heureFR(r.debut)}`, debut: undefined }))}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">

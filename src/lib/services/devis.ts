@@ -126,6 +126,7 @@ function lignesData(input: DevisInput, compos: Map<number, PieceComprise[]>) {
     return {
     type: l.type,
     designation: l.designation,
+    description: l.description?.trim() || null,
     quantite: l.quantite,
     ...prix,
     // La réduction ne concerne que les pièces : on ne garde un prix catalogue que sur ces lignes.
@@ -334,6 +335,7 @@ export async function lireDevis(id: string, user: PermissionUser) {
       id: l.id,
       type: l.type,
       designation: l.designation,
+      description: l.description,
       quantite: Number(l.quantite),
       prixUnitaireHT: pu,
       prixUnitaireTTC: prixUnitaireTTC({ prixUnitaireHT: pu, prixUnitaireTTC: l.prixUnitaireTTC !== null ? Number(l.prixUnitaireTTC) : null, tvaRate: Number(l.tvaRate) }),

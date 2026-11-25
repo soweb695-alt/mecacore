@@ -33,6 +33,8 @@ export async function garagePdf(): Promise<
 interface LigneSource {
   type: string;
   designation: string;
+  /** Descriptif de la ligne (tarif ou saisie), imprimé en premier sous la désignation. */
+  description?: string | null;
   quantite: unknown;
   prixUnitaireHT: unknown;
   prixUnitaireTTC?: unknown;
@@ -62,7 +64,7 @@ export async function lignesPdf(lignes: LigneSource[], affichage: AffichageRemis
     const calcul = { quantite, prixUnitaireHT: pu, prixUnitaireTTC: l.prixUnitaireTTC != null ? Number(l.prixUnitaireTTC) : null, tvaRate: Number(l.tvaRate) };
     const cat = l.prixCatalogueHT != null ? Number(l.prixCatalogueHT) : null;
     const taux = tauxRemiseLigne({ prixUnitaireHT: pu, prixCatalogueHT: cat });
-    const detail: string[] = [];
+    const detail: string[] = l.description?.trim() ? [l.description.trim()] : [];
     if (l.type === "PIECE") {
       const ref = l.pieceId ? refs.get(l.pieceId) : undefined;
       if (ref && !l.designation.toUpperCase().includes(ref.toUpperCase())) detail.push(`Pièce réf. ${ref}`);
