@@ -176,10 +176,22 @@ test("5. devis de pièces → bon de livraison en attente ; seuil d'alerte → b
   await expect(page.getByRole("cell", { name: /^BL-\d{4}-0001/ })).toBeVisible();
   await expect(page.getByText("En attente", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Automatique").first()).toBeVisible();
-  await page.getByRole("button", { name: "Prêt à être retiré" }).click();
+  // Liste compacte sur ordinateur : les actions d'un bon sont dans son menu « ⋯ ».
+  await page.getByRole("button", { name: /^Actions BL-\d{4}-0001/ }).click();
+  await page.getByRole("menuitem", { name: "Prêt à être retiré" }).click();
   await expect(page.getByText("Commande prête à être retirée")).toBeVisible();
-  await page.getByRole("button", { name: "Marquer livré" }).click();
+  await page.getByRole("button", { name: /^Actions BL-\d{4}-0001/ }).click();
+  await page.getByRole("menuitem", { name: "Marquer livré" }).click();
   await expect(page.getByText("Commande livrée")).toBeVisible();
+  await page.getByRole("button", { name: /^Actions BL-\d{4}-0001/ }).click();
+  await expect(page.getByRole("menuitem", { name: "Envoyer le BL" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Tablette : cartes empilées, sans défilement horizontal.
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await expect(page.getByRole("list", { name: "Bons de livraison" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Envoyer le BL" }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("6. la fiche d'un véhicule liste ses devis et factures", async ({ page }) => {

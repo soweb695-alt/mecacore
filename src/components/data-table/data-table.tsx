@@ -3,7 +3,7 @@
 import { useTable, type RowData, type RowSelectionState, type SortingState, type Updater, type HeaderContext, type CellContext } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,13 +43,34 @@ interface Props<TData extends RowData> {
   ligneClassName?: (row: TData) => string | undefined;
   /** Libellé accessible de la liste. */
   libelle: string;
+  /**
+   * Affichage en cartes empilées sur tablette et téléphone (écran < 1024 px), à la place du tableau qui obligerait à
+   * faire défiler horizontalement. Reçoit la ligne et de quoi afficher sa case de sélection (null si non cochable).
+   */
+  carte?: (row: TData, caseSelection: ((libelle: string) => ReactNode) | null) => ReactNode;
+}
+
+const ECRAN_LARGE = "(min-width: 1024px)";
+/** Vrai sur ordinateur (≥ 1024 px). Côté serveur et à l'hydratation : vrai (tableau), puis ajusté au vrai écran. */
+function useEcranLarge(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(ECRAN_LARGE);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(ECRAN_LARGE).matches,
+    () => true,
+  );
 }
 
 /**
  * Data Table (shadcn/ui + TanStack Table v9) utilisé par toutes les listes de l'application.
  * Les colonnes sont définies dans le fichier `columns.tsx` de chaque domaine.
  */
-export function DataTable<TData extends RowData>({ columns, data, getRowId, vide, recherche, taillePage = 25, sansPagination = false, serveur, triInitial = [], actionsSelection, ligneSelectionnable, aideSelection = "Cochez des lignes pour agir dessus.", compteSelection = (n) => `${n} ligne${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""}`, ligneClassName, libelle }: Props<TData>) {
+export function DataTable<TData extends RowData>({ columns, data, getRowId, vide, recherche, taillePage = 25, sansPagination = false, serveur, triInitial = [], actionsSelection, ligneSelectionnable, aideSelection = "Cochez des lignes pour agir dessus.", compteSelection = (n) => `${n} ligne${n > 1 ? "s" : ""} sélectionnée${n > 1 ? "s" : ""}`, ligneClassName, libelle, carte }: Props<TData>) {
+  const ecranLarge = useEcranLarge();
+  const enCartes = !!carte && !ecranLarge;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -125,38 +146,57 @@ export function DataTable<TData extends RowData>({ columns, data, getRowId, vide
           )}
         </div>
       )}
-      <Table aria-label={libelle}>
-        <TableHeader>
-          {table.getHeaderGroups().map((groupe) => (
-            <TableRow key={groupe.id}>
-              {groupe.headers.map((h) => (
-                <TableHead key={h.id} aria-sort={h.column.getIsSorted() === "asc" ? "ascending" : h.column.getIsSorted() === "desc" ? "descending" : undefined}>
-                  {h.isPlaceholder ? null : <table.FlexRender header={h} />}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
+      {enCartes ? (
+        <ul aria-label={libelle} className="space-y-2">
           {lignes.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={nbColonnes} className="py-10 text-center text-muted-foreground">
-                {filtre ? "Aucune ligne ne correspond à cette recherche." : vide}
-              </TableCell>
-            </TableRow>
+            <li className="py-10 text-center text-sm text-muted-foreground">{filtre ? "Aucune ligne ne correspond à cette recherche." : vide}</li>
           ) : (
             lignes.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined} className={ligneClassName?.(row.original)}>
-                {row.getAllCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    <table.FlexRender cell={cell} />
-                  </TableCell>
-                ))}
-              </TableRow>
+              <li key={row.id} data-state={row.getIsSelected() ? "selected" : undefined} className={cn("rounded-lg border p-3 data-[state=selected]:border-primary data-[state=selected]:bg-primary/5", ligneClassName?.(row.original))}>
+                {carte(
+                  row.original,
+                  actionsSelection && row.getCanSelect()
+                    ? (libelleCase: string) => <input type="checkbox" className="size-5 shrink-0 accent-primary" aria-label={`Sélectionner ${libelleCase}`} checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()} />
+                    : null,
+                )}
+              </li>
             ))
           )}
-        </TableBody>
-      </Table>
+        </ul>
+      ) : (
+        <Table aria-label={libelle}>
+          <TableHeader>
+            {table.getHeaderGroups().map((groupe) => (
+              <TableRow key={groupe.id}>
+                {groupe.headers.map((h) => (
+                  <TableHead key={h.id} aria-sort={h.column.getIsSorted() === "asc" ? "ascending" : h.column.getIsSorted() === "desc" ? "descending" : undefined}>
+                    {h.isPlaceholder ? null : <table.FlexRender header={h} />}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {lignes.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={nbColonnes} className="py-10 text-center text-muted-foreground">
+                  {filtre ? "Aucune ligne ne correspond à cette recherche." : vide}
+                </TableCell>
+              </TableRow>
+            ) : (
+              lignes.map((row) => (
+                <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined} className={ligneClassName?.(row.original)}>
+                  {row.getAllCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
       {!sansPagination && pages > 1 && (
         <nav aria-label="Pagination" className="flex items-center justify-between px-2 text-sm text-muted-foreground">
           <span>
