@@ -35,7 +35,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
   });
   if (!f) notFound();
 
-  // Brouillon préparé à la fin d'un OR : le Magasin ajuste les lignes puis émet la facture (numéro attribué à l'émission).
+  // Brouillon (fin d'OR, ou facture enregistrée en brouillon) : lignes modifiables, aperçu PDF, puis émission (numéro attribué à ce moment).
   if (f.statut === "BROUILLON") {
     const pieces = await db.piece.findMany({ where: { id: { in: f.lignes.flatMap((l) => (l.pieceId ? [l.pieceId] : [])) } }, select: { id: true, stock: true } });
     const stock = new Map(pieces.map((p) => [p.id, p.stock]));
@@ -64,10 +64,19 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
             </>
           }
           actions={
-            <a href={`/api/factures/${f.id}/pdf`} target="_blank" rel="noopener" className={cn(buttonVariants({ variant: "outline" }))}>
-              <FileDown aria-hidden />
-              Aperçu PDF
-            </a>
+            can(user, "update", "facture") && (
+              <ConfirmButton
+                label="Supprimer le brouillon"
+                title="Supprimer ce brouillon ?"
+                description="Le brouillon est supprimé définitivement. Aucun numéro de facture n'a été attribué et le stock n'a pas bougé ; ses bons de livraison ou son devis pourront être facturés à nouveau."
+                url={`/api/factures/${f.id}`}
+                method="DELETE"
+                success="Brouillon supprimé"
+                variant="outline"
+                size="default"
+                redirectTo="/factures"
+              />
+            )
           }
         />
         {can(user, "update", "facture") ? (

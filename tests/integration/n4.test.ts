@@ -135,7 +135,7 @@ describe("OR terminé → facture brouillon → émission", () => {
     const { factureId } = await orTermine([{ ...ligne(b.p1.id, 1, 50), designation: "Plaquettes avant" }, MO]);
     const r = await pdfFacture(factureId);
     const doc = await PDFDocument.load(r!.pdf);
-    expect(doc.getTitle()).toBe("Facture (brouillon) non attribué");
+    expect(doc.getTitle()).toBe("Facture (brouillon) attribué à l'émission");
     const texte = textePdf(r!.pdf);
     for (const m of ["Immatriculation : AB-123-CD", "Kilométrage : 81 250 km", "Pièce réf. P1", "temps facturé 1,5 h au taux horaire de 60,00 EUR HT", "1,5 h", "Document de travail"]) {
       expect(texte, m).toContain(m);

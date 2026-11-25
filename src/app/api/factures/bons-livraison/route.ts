@@ -8,5 +8,5 @@ const body = z.object({ bonLivraisonIds: z.array(idStr).min(1, "Sélectionnez au
 
 /** « Transformer en facture » : une facture unique pour les bons de livraison cochés. */
 export const POST = route({ permission: ["create", "facture"], body }, async ({ body, user }) =>
-  creerFactureDepuisBons(body.bonLivraisonIds, user.id, { remise: body.remise, modePaiement: body.modePaiement }),
+  creerFactureDepuisBons(body.bonLivraisonIds, user.id, { remise: body.remise, modePaiement: body.modePaiement, brouillon: body.brouillon }),
 );

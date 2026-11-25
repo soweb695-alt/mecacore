@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Eye, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -122,12 +122,23 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
     setLignes((ls) => ls.map((l) => (l.pieceId && l.prixCatalogueHT !== null ? { ...l, ...avecHT(appliquerRemisePro(l.prixCatalogueHT, remisePct), num(l.tvaRate)) } : l)));
   }
 
-  async function soumettre(emettre = true) {
+  /**
+   * « Enregistrer en brouillon », « Aperçu PDF » (enregistre le brouillon puis ouvre son PDF filigrané « BROUILLON »)
+   * ou « Émettre la facture » (numéro légal attribué, stock ajusté).
+   */
+  async function soumettre(action: "brouillon" | "apercu" | "emettre") {
     setErreur(null);
     if (!client) return setErreur("Choisissez le client.");
     if (lignes.length === 0) return setErreur("Ajoutez au moins une ligne.");
     if (lignes.some((l) => !l.designation.trim() || num(l.quantite) <= 0)) return setErreur("Chaque ligne doit avoir une désignation et une quantité positive.");
     if (a.erreur) return setErreur(a.erreur);
+    // Fenêtre ouverte tout de suite (au clic) : sinon le navigateur bloque l'ouverture après l'enregistrement.
+    const fenetre = action === "apercu" ? window.open("about:blank", "_blank") : null;
+    const ouvrirApercu = (id: string) => {
+      const url = `/api/factures/${id}/pdf`;
+      if (fenetre) fenetre.location.href = url;
+      else window.open(url, "_blank");
+    };
     setPending(true);
     try {
       const corps = {
@@ -149,8 +160,9 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
       };
       if (brouillon) {
         await api(`/api/factures/${brouillon.id}`, "PUT", corps);
-        if (!emettre) {
-          toast.success("Brouillon enregistré");
+        if (action !== "emettre") {
+          if (action === "apercu") ouvrirApercu(brouillon.id);
+          else toast.success("Brouillon enregistré");
           setPending(false);
           return router.refresh();
         }
@@ -158,10 +170,12 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
         toast.success(`Facture ${r.numero} émise`);
         return router.refresh();
       }
-      const r = await api<{ id: string; numero: string }>("/api/factures/manuelle", "POST", { clientId: client.id, ...corps });
-      toast.success(`Facture ${r.numero} émise`);
+      const r = await api<{ id: string; numero: string | null }>("/api/factures/manuelle", "POST", { clientId: client.id, ...corps, brouillon: action !== "emettre" });
+      if (action === "apercu") ouvrirApercu(r.id);
+      toast.success(action === "emettre" ? `Facture ${r.numero} émise` : "Brouillon enregistré : vous pouvez le modifier, le prévisualiser puis l'émettre.");
       router.push(`/factures/${r.id}`);
     } catch (e) {
+      fenetre?.close();
       setErreur(e instanceof Error ? e.message : "Une erreur est survenue.");
       setPending(false);
     }
@@ -313,17 +327,21 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
           {erreur}
         </p>
       )}
-      <div className="flex justify-end gap-2">
-        {brouillon ? (
-          <Button type="button" variant="outline" onClick={() => soumettre(false)} disabled={pending}>
-            Enregistrer le brouillon
-          </Button>
-        ) : (
-          <Button type="button" variant="outline" onClick={() => router.push("/factures")} disabled={pending}>
+      <div className="flex flex-wrap justify-end gap-2">
+        {!brouillon && (
+          <Button type="button" variant="ghost" onClick={() => router.push("/factures")} disabled={pending}>
             Annuler
           </Button>
         )}
-        <Button type="button" onClick={() => soumettre(true)} disabled={pending}>
+        <Button type="button" variant="outline" onClick={() => soumettre("brouillon")} disabled={pending}>
+          <Save aria-hidden />
+          {brouillon ? "Enregistrer le brouillon" : "Enregistrer en brouillon"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => soumettre("apercu")} disabled={pending}>
+          <Eye aria-hidden />
+          Aperçu PDF
+        </Button>
+        <Button type="button" onClick={() => soumettre("emettre")} disabled={pending}>
           {pending && <Loader2 className="animate-spin" aria-hidden />}
           Émettre la facture
         </Button>

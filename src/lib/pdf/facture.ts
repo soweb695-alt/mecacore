@@ -16,7 +16,8 @@ export async function pdfFacture(id: string): Promise<{ nom: string; pdf: Uint8A
   const brouillon = f.statut === "BROUILLON";
   const pdf = await genererPdf({
     titre: brouillon ? "Facture (brouillon)" : "Facture",
-    numero: f.numero ?? "non attribué",
+    numero: f.numero ?? "attribué à l'émission",
+    filigrane: brouillon ? "BROUILLON" : undefined,
     dateEmission: f.dateEmission,
     dateSecondaire: { label: "Échéance", date: f.dateEcheance },
     garage,

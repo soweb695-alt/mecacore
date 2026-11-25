@@ -1,9 +1,7 @@
 "use client";
 
 import { Receipt } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 import { FacturerDialog } from "@/components/factures/facturer-dialog";
 import { stateDepuisRemise } from "@/components/factures/options-facture";
 import { Button } from "@/components/ui/button";
@@ -12,7 +10,6 @@ import type { RemiseGlobale, Totaux } from "@/lib/money";
 
 /** `totaux` : totaux du devis avant sa remise globale ; `remise` : remise du devis, pré-remplie et modifiable. */
 export function CreerFactureButton({ devisId, totaux, remise = null }: { devisId: string; totaux: Totaux; remise?: RemiseGlobale | null }) {
-  const router = useRouter();
   const [ouvert, setOuvert] = useState(false);
   return (
     <>
@@ -26,11 +23,7 @@ export function CreerFactureButton({ devisId, totaux, remise = null }: { devisId
         totaux={totaux}
         initial={stateDepuisRemise(remise)}
         description={remise ? "La remise du devis est reprise ; vous pouvez la modifier et indiquer le mode de règlement avant l'émission." : "Vous pouvez appliquer une remise globale et indiquer le mode de règlement avant l'émission."}
-        onConfirm={async (options) => {
-          const r = await api<{ id: string; numero: string }>("/api/factures", "POST", { devisId, ...options });
-          toast.success(`Facture ${r.numero} émise`);
-          router.push(`/factures/${r.id}`);
-        }}
+        onConfirm={(options) => api<{ id: string; numero: string | null }>("/api/factures", "POST", { devisId, ...options })}
       />
     </>
   );
