@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -60,7 +59,6 @@ export function VehiculeForm({
   const router = useRouter();
   const closeDialog = useCloseDialog();
   const annuler = onCancel ?? closeDialog;
-  const [decoding, setDecoding] = useState(false);
   const idProprio = vehicule?.clientId ?? clientId ?? null;
   const [proprio, setProprio] = useState<{ id: string; nom: string } | null>(idProprio ? { id: idProprio, nom: clientNom ?? "Propriétaire actuel" } : null);
   const imposé = !!clientId && !vehicule;
@@ -69,8 +67,6 @@ export function VehiculeForm({
   const {
     register,
     handleSubmit,
-    getValues,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<VehiculeInput>({
     resolver: zodResolver(vehiculeSchema),
@@ -86,59 +82,6 @@ export function VehiculeForm({
       prochainCT: vehicule?.prochainCT ?? "",
     },
   });
-
-  async function decoder() {
-    const vin = (getValues("vin") ?? "").trim().toUpperCase();
-    if (vin.length !== 17) {
-      toast.error("Saisissez un VIN de 17 caractères.");
-      return;
-    }
-    setDecoding(true);
-    try {
-      const info = await api<{ marque: string; modele: string; annee: number | null; motorisation: string | null } | null>(`/api/integrations/vin?vin=${encodeURIComponent(vin)}`, "GET");
-      if (!info) {
-        toast.info("Décodage indisponible : renseignez le véhicule manuellement.");
-        return;
-      }
-      setValue("marque", info.marque, { shouldValidate: true });
-      setValue("modele", info.modele, { shouldValidate: true });
-      setValue("annee", info.annee);
-      setValue("motorisation", info.motorisation ?? "");
-      toast.success("Caractéristiques du véhicule trouvées");
-    } catch {
-      toast.info("Décodage indisponible : renseignez le véhicule manuellement.");
-    } finally {
-      setDecoding(false);
-    }
-  }
-
-  async function decoderPlaque() {
-    const plaque = (getValues("immatriculation") ?? "").trim().toUpperCase();
-    if (plaque.length < 4) {
-      toast.error("Saisissez d'abord l'immatriculation.");
-      return;
-    }
-    setDecoding(true);
-    try {
-      const r = await api<{ configure: boolean; info: { marque: string; modele: string; annee: number | null; motorisation: string | null } | null }>(
-        `/api/integrations/plaque?plaque=${encodeURIComponent(plaque)}`,
-        "GET",
-      );
-      if (!r.info) {
-        toast.info(r.configure ? "Aucun véhicule trouvé pour cette plaque : saisie manuelle." : "Le décodage de plaque n'est pas encore branché : saisie manuelle.");
-        return;
-      }
-      setValue("marque", r.info.marque, { shouldValidate: true });
-      setValue("modele", r.info.modele, { shouldValidate: true });
-      setValue("annee", r.info.annee);
-      setValue("motorisation", r.info.motorisation ?? "");
-      toast.success("Caractéristiques du véhicule trouvées");
-    } catch {
-      toast.info("Décodage de plaque indisponible : saisie manuelle.");
-    } finally {
-      setDecoding(false);
-    }
-  }
 
   async function onSubmit(values: VehiculeInput) {
     const body = { ...values, clientId: proprio?.id ?? null };
@@ -204,24 +147,12 @@ export function VehiculeForm({
           Propriétaire : <b>{clientNom}</b>
         </p>
       )}
-      <div className="flex items-end gap-2">
-        <Field label="Immatriculation" htmlFor="immatriculation" error={errors.immatriculation?.message} className="flex-1" hint="Le décodage retrouve marque, modèle et motorisation.">
-          <Input id="immatriculation" className="uppercase" placeholder="AB-123-CD" aria-invalid={!!errors.immatriculation} {...register("immatriculation")} />
-        </Field>
-        <Button type="button" variant="outline" onClick={decoderPlaque} disabled={decoding} className="mb-[22px]">
-          <Search aria-hidden />
-          Décoder la plaque
-        </Button>
-      </div>
-      <div className="flex items-end gap-2">
-        <Field label="VIN (optionnel)" htmlFor="vin" error={errors.vin?.message} className="flex-1" hint="17 caractères : retrouve marque, modèle et motorisation.">
-          <Input id="vin" maxLength={17} className="uppercase" aria-invalid={!!errors.vin} {...register("vin")} />
-        </Field>
-        <Button type="button" variant="outline" onClick={decoder} disabled={decoding} className="mb-[22px]">
-          <Search aria-hidden />
-          Décoder le VIN
-        </Button>
-      </div>
+      <Field label="Immatriculation" htmlFor="immatriculation" error={errors.immatriculation?.message}>
+        <Input id="immatriculation" className="uppercase" placeholder="AB-123-CD" aria-invalid={!!errors.immatriculation} {...register("immatriculation")} />
+      </Field>
+      <Field label="VIN (optionnel)" htmlFor="vin" error={errors.vin?.message} hint="17 caractères (case E de la carte grise).">
+        <Input id="vin" maxLength={17} className="uppercase" aria-invalid={!!errors.vin} {...register("vin")} />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Année" htmlFor="annee" error={errors.annee?.message}>
           <Input id="annee" type="number" aria-invalid={!!errors.annee} {...register("annee", { setValueAs: nombreOuNull })} />
