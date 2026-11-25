@@ -18,6 +18,8 @@ export interface OptionsFacture {
   /** Remise globale. `undefined` : reprendre celle du (des) devis ; `null` : aucune remise. */
   remise?: RemiseGlobale | null;
   modePaiement?: "CB" | "ESPECES" | "CHEQUE" | "VIREMENT" | "PLUSIEURS_FOIS" | null;
+  /** true : facture enregistrée en brouillon (sans numéro, stock inchangé), émise plus tard avec « Émettre la facture ». */
+  brouillon?: boolean;
 }
 
 /** Totaux après remise globale + colonnes à enregistrer (la remise est tracée sur la facture et son PDF). */
@@ -179,13 +181,20 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
 export async function emettreBrouillon(id: string, userId: string) {
   const facture = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Facture" WHERE id = ${id} FOR UPDATE`;
-    const f = await tx.facture.findUnique({ where: { id }, include: { client: true, lignes: true, devis: { include: { lignes: true, ordre: { select: { id: true } } } } } });
+    const f = await tx.facture.findUnique({ where: { id }, include: { client: true, lignes: true, devis: { include: { lignes: true, ordre: { select: { id: true } } } }, bonsLivraison: { include: { lignes: true, devis: { include: { lignes: true } } } } } });
     if (!f) throw new ApiError(404, "Facture introuvable", "INTROUVABLE");
     if (f.statut !== "BROUILLON") throw new ApiError(409, "Cette facture est déjà émise", "STATUT_INVALIDE");
 
     const qte = (ls: { type: string; pieceId: string | null; quantite: unknown; composition: unknown }[]) =>
       quantitesParPiece(ls.map((l) => ({ type: l.type, pieceId: l.pieceId, quantite: Number(l.quantite), composition: l.composition })));
-    const avant = qte(f.devis?.lignes ?? []);
+    // Référence du stock déjà sorti : les lignes du devis (décrémentées à sa validation) ; pour des bons de livraison
+    // regroupés, celles de leurs devis (ou du bon lui-même s'il a été créé à la main, sans mouvement de stock) ;
+    // rien pour une facture saisie à la main.
+    type LigneStock = { type: string; pieceId: string | null; quantite: unknown; composition: unknown };
+    const references: LigneStock[] = f.devis
+      ? f.devis.lignes
+      : f.bonsLivraison.flatMap((b): LigneStock[] => b.devis?.lignes ?? b.lignes.map((l) => ({ type: "PIECE", pieceId: l.pieceId, quantite: l.quantite, composition: null })));
+    const avant = qte(references);
     const apres = qte(f.lignes);
     const ecarts = [...new Set([...avant.keys(), ...apres.keys()])].sort().map((pieceId) => ({ pieceId, delta: (apres.get(pieceId) ?? 0) - (avant.get(pieceId) ?? 0) }));
     const penurie: { reference: string; nom: string; demande: number; disponible: number }[] = [];
@@ -224,7 +233,8 @@ export async function creerFactureDepuisDevis(devisId: string, userId?: string, 
     if (devis.facture || devis.bonLivraison?.factureId) throw new ApiError(409, "Ce devis est déjà facturé", "DEJA_FACTURE");
 
     const now = new Date();
-    const numero = await prochainNumero(tx, "FACTURE", now);
+    const brouillon = !!opts?.brouillon;
+    const numero = brouillon ? null : await prochainNumero(tx, "FACTURE", now);
     const f = await tx.facture.create({
       data: {
         numero,
@@ -235,14 +245,15 @@ export async function creerFactureDepuisDevis(devisId: string, userId?: string, 
         dateEcheance: ajouterJours(now, devis.client.paymentTerms ?? 30),
         remisePro: devis.remisePro,
         ...totauxEtRemise(totauxAvantRemiseDevis(devis), { ...opts, remise: opts?.remise !== undefined ? opts.remise : lireRemiseGlobale(devis) }),
-        statut: "EMISE",
+        statut: brouillon ? "BROUILLON" : "EMISE",
         kilometrage: devis.ordre?.kilometrage ?? devis.kilometrage,
         lignes: { create: devis.lignes.map(copieLigneDevis) },
       },
     });
     // Le bon de livraison du devis est rattaché à la facture (il ne pourra plus être regroupé ailleurs).
     if (devis.bonLivraison) await tx.bonLivraison.update({ where: { id: devis.bonLivraison.id }, data: { factureId: f.id } });
-    if (devis.ordre) await cloturerOrdre(tx, devis.ordre.id, userId);
+    // Brouillon : l'OR est clôturé à l'émission.
+    if (devis.ordre && !brouillon) await cloturerOrdre(tx, devis.ordre.id, userId);
     return f;
   });
   return { id: facture.id, numero: facture.numero };
@@ -298,7 +309,8 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
       remise = reduction > 0 ? { type: "EUROS", base: "TTC", valeur: round2(reduction) } : null;
     }
     const now = new Date();
-    const numero = await prochainNumero(tx, "FACTURE", now);
+    const brouillon = !!opts?.brouillon;
+    const numero = brouillon ? null : await prochainNumero(tx, "FACTURE", now);
     const f = await tx.facture.create({
       data: {
         numero,
@@ -308,7 +320,7 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
         dateEcheance: ajouterJours(now, client.paymentTerms ?? 30),
         remisePro: remisePct,
         ...totauxEtRemise(totaux, { ...opts, remise }),
-        statut: "EMISE",
+        statut: brouillon ? "BROUILLON" : "EMISE",
         lignes: { create: lignes.map((l, i) => ({ ...l, ...prixLigne(l), position: i })) },
       },
     });
@@ -324,33 +336,36 @@ export async function creerFactureDepuisBons(bonLivraisonIds: string[], userId: 
  * (décrément conditionnel : jamais de stock négatif) et peuvent déclencher le réapprovisionnement automatique.
  */
 export async function creerFactureManuelle(userId: string, input: { clientId: string; dateEcheance?: string; lignes: LigneInput[] } & OptionsFacture) {
+  const brouillon = !!input.brouillon;
   const facture = await db.$transaction(async (tx) => {
     const client = await tx.client.findUnique({ where: { id: input.clientId } });
     if (!client || client.anonymiseLe) throw new ApiError(404, "Client introuvable", "INTROUVABLE");
 
     // Prix d'achat tracé pour l'analyse des marges ; stock décrémenté pour chaque pièce du stock (lignes Pièce et
-    // pièces rattachées depuis le descriptif).
+    // pièces rattachées depuis le descriptif). Brouillon : le stock ne bouge qu'à l'émission.
     const compos = await piecesDuDescriptif(tx, input.lignes);
     const demandes = quantitesParPiece(input.lignes.map((l, i) => ({ type: "PIECE", pieceId: l.pieceId, quantite: l.quantite, composition: compos.get(i) })));
     const pieces = await tx.piece.findMany({ where: { id: { in: [...demandes.keys()] } }, select: { id: true, nom: true, reference: true, prixAchatHT: true } });
     if (pieces.length !== demandes.size) throw new ApiError(400, "Une pièce du stock est introuvable", "PIECE_INTROUVABLE");
-    const penurie: { reference: string; nom: string; demande: number; disponible: number }[] = [];
-    for (const p of pieces) {
-      const qte = demandes.get(p.id)!;
-      const r = await tx.piece.updateMany({ where: { id: p.id, stock: { gte: qte } }, data: { stock: { decrement: qte } } });
-      if (r.count === 0) {
-        const courant = await tx.piece.findUnique({ where: { id: p.id }, select: { stock: true } });
-        penurie.push({ reference: p.reference, nom: p.nom, demande: qte, disponible: courant?.stock ?? 0 });
+    if (!brouillon) {
+      const penurie: { reference: string; nom: string; demande: number; disponible: number }[] = [];
+      for (const p of pieces) {
+        const qte = demandes.get(p.id)!;
+        const r = await tx.piece.updateMany({ where: { id: p.id, stock: { gte: qte } }, data: { stock: { decrement: qte } } });
+        if (r.count === 0) {
+          const courant = await tx.piece.findUnique({ where: { id: p.id }, select: { stock: true } });
+          penurie.push({ reference: p.reference, nom: p.nom, demande: qte, disponible: courant?.stock ?? 0 });
+        }
       }
+      if (penurie.length) throw new ApiError(409, "Stock insuffisant", "STOCK_INSUFFISANT", penurie);
+      await verifierReapprovisionnement(tx, [...demandes.keys()]);
     }
-    if (penurie.length) throw new ApiError(409, "Stock insuffisant", "STOCK_INSUFFISANT", penurie);
-    await verifierReapprovisionnement(tx, [...demandes.keys()]);
 
     const achat = new Map(pieces.map((p) => [p.id, Number(p.prixAchatHT)]));
     const now = new Date();
     const echeance = input.dateEcheance ? new Date(`${input.dateEcheance}T12:00:00Z`) : ajouterJours(now, client.paymentTerms ?? 30);
     const remisePro = client.type === "PRO" ? Number(client.discountRate) : 0;
-    const numero = await prochainNumero(tx, "FACTURE", now);
+    const numero = brouillon ? null : await prochainNumero(tx, "FACTURE", now);
     return tx.facture.create({
       data: {
         numero,
@@ -361,7 +376,7 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
         dateEcheance: echeance,
         remisePro: input.lignes.some((l) => l.prixCatalogueHT != null) ? remisePro : 0,
         ...totauxEtRemise(calculerTotaux(input.lignes), input),
-        statut: "EMISE",
+        statut: brouillon ? "BROUILLON" : "EMISE",
         lignes: {
           create: input.lignes.map((l, i) => ({
             type: l.type,
@@ -381,6 +396,23 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
     });
   });
   return { id: facture.id, numero: facture.numero };
+}
+
+/**
+ * Suppression d'un brouillon (jamais d'une facture émise) : ses bons de livraison redeviennent facturables, son devis
+ * peut être refacturé. Le stock n'a pas bougé (il n'est ajusté qu'à l'émission).
+ */
+export async function supprimerBrouillon(id: string) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Facture" WHERE id = ${id} FOR UPDATE`;
+    const f = await tx.facture.findUnique({ where: { id }, select: { statut: true } });
+    if (!f) throw new ApiError(404, "Facture introuvable", "INTROUVABLE");
+    if (f.statut !== "BROUILLON") throw new ApiError(409, "Seul un brouillon peut être supprimé ; une facture émise s'annule", "STATUT_INVALIDE");
+    await tx.bonLivraison.updateMany({ where: { factureId: id }, data: { factureId: null } });
+    await tx.ligneFacture.deleteMany({ where: { factureId: id } });
+    await tx.facture.delete({ where: { id } });
+    return { id };
+  });
 }
 
 /** Transmission à la Plateforme Agréée (ou mock) et traçage du statut. Jamais automatique : bouton « Transmettre » de la facture. */

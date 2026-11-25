@@ -27,10 +27,12 @@ export { remiseGlobaleSchema };
 
 export const modePaiementSchema = z.enum(["CB", "ESPECES", "CHEQUE", "VIREMENT", "PLUSIEURS_FOIS"]);
 
-/** Options communes à toute création de facture : remise globale et mode de règlement prévu. */
+/** Options communes à toute création de facture : remise globale, mode de règlement prévu, brouillon. */
 export const optionsFactureSchema = z.object({
   remise: remiseGlobaleSchema.nullable().optional(),
   modePaiement: modePaiementSchema.nullable().optional(),
+  /** Enregistrer en brouillon (sans numéro, modifiable, aperçu PDF) au lieu d'émettre. */
+  brouillon: z.boolean().optional(),
 });
 
 export const factureDepuisDevisAvecOptionsSchema = factureDepuisDevisSchema.extend(optionsFactureSchema.shape);

@@ -217,11 +217,7 @@ export function BonsLivraisonTable({ rows, peutModifier, peutFacturer }: { rows:
         onClose={() => setAFacturer(null)}
         heriterSiVide
         description="Une facture unique regroupe les bons sélectionnés. Laissez la remise vide pour reprendre celles des devis ; le mode de règlement se règle avant l'émission."
-        onConfirm={async (options) => {
-          const f = await api<{ id: string; numero: string }>("/api/factures/bons-livraison", "POST", { bonLivraisonIds: aFacturer ?? [], ...options });
-          toast.success(`Facture ${f.numero} créée`);
-          router.push(`/factures/${f.id}`);
-        }}
+        onConfirm={(options) => api<{ id: string; numero: string | null }>("/api/factures/bons-livraison", "POST", { bonLivraisonIds: aFacturer ?? [], ...options })}
       />
       <DataTable
         libelle="Bons de livraison"

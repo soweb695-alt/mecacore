@@ -1,5 +1,5 @@
 import { APP_NAME } from "@/lib/app";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { degrees, PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 
 export interface PdfLigne {
   designation: string;
@@ -47,6 +47,8 @@ export interface PdfDocData {
    * client). Sans image : cadre vide à signer sur papier.
    */
   signature?: { mention: string; nom: string; le: Date | null; image: Uint8Array | null };
+  /** Grand texte en travers de chaque page (ex. « BROUILLON » sur une facture non émise). */
+  filigrane?: string;
 }
 
 /** Prix TTC d'un montant HT, arrondi au centime. */
@@ -339,6 +341,26 @@ export async function genererPdf(d: PdfDocData): Promise<Uint8Array> {
     }
     if (!signee) text(page, "Non signé : à signer à la remise du véhicule", xCadre + 8, y - hCadre + 8, { size: 7, color: GRIS_CLAIR });
     y -= hCadre + 10;
+  }
+
+  // Filigrane (document de travail) : en diagonale, gris très clair, sur chaque page.
+  if (d.filigrane) {
+    const t = safe(d.filigrane);
+    const size = Math.min(110, (W * 0.95) / Math.max(1, bold.widthOfTextAtSize(t, 1)));
+    const largeur = bold.widthOfTextAtSize(t, size);
+    const angle = 35;
+    const rad = (angle * Math.PI) / 180;
+    for (const p of pdf.getPages()) {
+      p.drawText(t, {
+        x: W / 2 - (Math.cos(rad) * largeur) / 2 + (Math.sin(rad) * size) / 3,
+        y: H / 2 - (Math.sin(rad) * largeur) / 2 - (Math.cos(rad) * size) / 3,
+        size,
+        font: bold,
+        color: rgb(0.85, 0.2, 0.2),
+        opacity: 0.12,
+        rotate: degrees(angle),
+      });
+    }
   }
 
   // Pied de page

@@ -451,8 +451,15 @@ test("13. administrateur : Mon Garage (coordonnées, IBAN / BIC), points de cont
   await page.getByLabel("Mode de règlement prévu").selectOption("VIREMENT");
   await expect(page.getByText("120,00").first()).not.toBeVisible();
   await expect(page.getByText(/108,00/).first()).toBeVisible(); // 100 − 10 % = 90 HT → 108 € TTC
-  await page.getByRole("button", { name: "Émettre la facture" }).click();
+  // Brouillon d'abord : sans numéro, modifiable ; aperçu PDF filigrané ; puis émission.
+  await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
   await expect(page).toHaveURL(/\/factures\/[a-z0-9]+$/);
+  await expect(page.getByRole("heading", { name: /Facture à émettre/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Supprimer le brouillon" })).toBeVisible();
+  const [apercu] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Aperçu PDF" }).click()]);
+  await expect.poll(() => apercu.url()).toMatch(/\/api\/factures\/[a-z0-9]+\/pdf$/);
+  await apercu.close();
+  await page.getByRole("button", { name: "Émettre la facture" }).click();
   await expect(page.getByText("saisie manuelle")).toBeVisible();
   await expect(page.getByText(/Remise 10 % \(sur HT\)/)).toBeVisible();
   await expect(page.getByText("L'IBAN et le BIC du garage figurent sur le PDF.")).toBeVisible();
