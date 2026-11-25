@@ -18,12 +18,15 @@ export interface PenurieStock {
   disponible: number;
 }
 
-/** Quantités demandées par pièce : lignes PIECE liées au stock + pièces comprises dans les forfaits (× quantité du forfait). */
+/**
+ * Quantités demandées par pièce : lignes PIECE liées au stock + pièces comprises dans la ligne (forfait du tarif ou
+ * rattachées depuis le descriptif), multipliées par la quantité de la ligne.
+ */
 export function quantitesParPiece(lignes: { type: TypeLigne | string; pieceId?: string | null; quantite: number; composition?: unknown }[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const l of lignes) {
     if (l.type === "PIECE" && l.pieceId) m.set(l.pieceId, (m.get(l.pieceId) ?? 0) + l.quantite);
-    if (l.type === "FORFAIT") for (const p of lireComposition(l.composition)) m.set(p.pieceId, (m.get(p.pieceId) ?? 0) + p.quantite * l.quantite);
+    for (const p of lireComposition(l.composition)) m.set(p.pieceId, (m.get(p.pieceId) ?? 0) + p.quantite * l.quantite);
   }
   return m;
 }
@@ -44,6 +47,34 @@ async function compositions(tx: Tx, input: DevisInput): Promise<Map<number, Piec
     if (!Number.isInteger(l.quantite)) throw new ApiError(400, `Le forfait « ${l.designation} » comprend des pièces : sa quantité doit être un nombre entier`, "QUANTITE_INVALIDE");
     out.set(i, pieces);
   });
+  return out;
+}
+
+/**
+ * Pièces rattachées depuis le descriptif des lignes, lues dans le stock (référence et nom figés sur la ligne).
+ * Clé : index de la ligne. Une pièce inexistante ou désactivée est refusée.
+ */
+export async function piecesDuDescriptif(tx: Tx, lignes: { piecesDescriptif?: { pieceId: string; quantite: number }[] }[]): Promise<Map<number, PieceComprise[]>> {
+  const ids = [...new Set(lignes.flatMap((l) => (l.piecesDescriptif ?? []).map((p) => p.pieceId)))];
+  const out = new Map<number, PieceComprise[]>();
+  if (ids.length === 0) return out;
+  const pieces = await tx.piece.findMany({ where: { id: { in: ids }, isActive: true }, select: { id: true, reference: true, nom: true } });
+  if (pieces.length !== ids.length) throw new ApiError(400, "Une pièce rattachée au descriptif n'existe plus ou est désactivée", "PIECE_INTROUVABLE");
+  const parId = new Map(pieces.map((p) => [p.id, p]));
+  lignes.forEach((l, i) => {
+    if (!l.piecesDescriptif?.length) return;
+    out.set(
+      i,
+      l.piecesDescriptif.map((p) => ({ pieceId: p.pieceId, reference: parId.get(p.pieceId)!.reference, nom: parId.get(p.pieceId)!.nom, quantite: p.quantite, descriptif: true })),
+    );
+  });
+  return out;
+}
+
+/** Pièces du tarif (forfait) puis pièces du descriptif d'une même ligne. */
+export function fusionnerCompositions(...cartes: Map<number, PieceComprise[]>[]): Map<number, PieceComprise[]> {
+  const out = new Map<number, PieceComprise[]>();
+  for (const c of cartes) for (const [i, ps] of c) out.set(i, [...(out.get(i) ?? []), ...ps]);
   return out;
 }
 
@@ -106,7 +137,7 @@ async function preparer(tx: Tx, input: DevisInput) {
     });
   }
   // Pièces (et pièces des forfaits) : doivent exister ; un stock insuffisant est signalé mais ne bloque pas.
-  const compos = await compositions(tx, input);
+  const compos = fusionnerCompositions(await compositions(tx, input), await piecesDuDescriptif(tx, input.lignes));
   const penuries = await verifierStock(tx, quantitesParPiece(input.lignes.map((l, i) => ({ ...l, composition: compos.get(i) }))));
 
   let totaux;
@@ -348,7 +379,8 @@ export async function lireDevis(id: string, user: PermissionUser) {
       // Alerte désactivée sur la pièce : pas de seuil transmis à l'éditeur.
       seuilAlerte: l.piece?.alerteActive ? l.piece.seuilAlerte : null,
       tarifId: l.tarifId,
-      piecesComprises: lireComposition(l.composition),
+      piecesComprises: lireComposition(l.composition).filter((p) => !p.descriptif),
+      piecesDescriptif: lireComposition(l.composition).filter((p) => p.descriptif),
       ...(marges && achat !== null ? { prixAchatHT: achat, margeHT: Math.round((Number(l.totalHT) - achat * Number(l.quantite)) * 100) / 100 } : {}),
     };
   });

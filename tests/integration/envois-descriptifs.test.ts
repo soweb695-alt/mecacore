@@ -11,7 +11,7 @@ import { GET as cronImpayes } from "@/app/api/cron/impayes/route";
 import { GET as cronRappels } from "@/app/api/cron/rappels-rdv/route";
 import { POST as rappelsPost } from "@/app/api/rappels-rdv/route";
 import { creerDevis, validerDevis } from "@/lib/services/devis";
-import { creerFactureDepuisDevis, creerFactureManuelle } from "@/lib/services/factures";
+import { annulerFacture, creerBrouillonTx, creerFactureDepuisDevis, creerFactureManuelle, emettreBrouillon, modifierBrouillon } from "@/lib/services/factures";
 import { enregistrerRdv } from "@/lib/services/rdv";
 import { pdfDevis } from "@/lib/pdf/devis";
 import { pdfFacture } from "@/lib/pdf/facture";
@@ -77,6 +77,56 @@ describe("descriptif des lignes", () => {
     const lignes = await db.ligneFacture.findMany({ where: { factureId: f.id }, orderBy: { position: "asc" } });
     expect(lignes.map((l) => l.description)).toEqual([VIDANGE, null]);
     expect(textePdf((await pdfFacture(f.id))!.pdf)).toContain("Vidange moteur");
+  });
+});
+
+describe("références du descriptif déduites du stock", () => {
+  const stock = async (id: string) => (await db.piece.findUniqueOrThrow({ where: { id } })).stock;
+  const forfait = (piecesDescriptif: { pieceId: string; quantite: number }[], quantite = 1) => ({
+    type: "FORFAIT" as const,
+    designation: "Forfait freinage",
+    description: "Remplacement plaquettes P1",
+    quantite,
+    prixUnitaireHT: 120,
+    tvaRate: 20,
+    piecesDescriptif,
+  });
+
+  it("devis : enregistrées sur la ligne, déduites à la validation (× quantité de la ligne)", async () => {
+    const { id } = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [forfait([{ pieceId: b.p1.id, quantite: 2 }], 2)] });
+    expect(await stock(b.p1.id)).toBe(5);
+    const lu = await db.ligneDevis.findFirstOrThrow({ where: { devisId: id } });
+    expect(lu.composition).toEqual([{ pieceId: b.p1.id, reference: "P1", nom: "Plaquettes", quantite: 2, descriptif: true }]);
+    expect(textePdf((await pdfDevis(id))!.pdf)).toContain("P1");
+
+    await validerDevis(id, { mecanicienId: b.meca.id, rdv: { debut: "2027-04-02T09:00", fin: "2027-04-02T10:00" } });
+    expect(await stock(b.p1.id)).toBe(1);
+  });
+
+  it("refuse une pièce désactivée et une quantité de ligne non entière", async () => {
+    await db.piece.update({ where: { id: b.p2.id }, data: { isActive: false } });
+    await expect(creerDevis(b.user.id, { type: "PIECE", clientId: b.client.id, lignes: [forfait([{ pieceId: b.p2.id, quantite: 1 }])] })).rejects.toMatchObject({ code: "PIECE_INTROUVABLE" });
+    const { ligneSchema } = await import("@/lib/validators/devis");
+    expect(ligneSchema.safeParse(forfait([{ pieceId: b.p1.id, quantite: 1 }], 1.5)).success).toBe(false);
+  });
+
+  it("facture saisie à la main : déduites à l'émission, rendues à l'annulation", async () => {
+    const f = await creerFactureManuelle(b.user.id, { clientId: b.client.id, lignes: [forfait([{ pieceId: b.p1.id, quantite: 1 }, { pieceId: b.p2.id, quantite: 3 }])] });
+    expect([await stock(b.p1.id), await stock(b.p2.id)]).toEqual([4, 2]);
+    await annulerFacture(f.id);
+    expect([await stock(b.p1.id), await stock(b.p2.id)]).toEqual([5, 5]);
+  });
+
+  it("brouillon de facture : une pièce rattachée après le devis est déduite à l'émission, en plus des pièces du devis", async () => {
+    const { id } = await creerDevis(b.user.id, { type: "MECANIQUE", clientId: b.client.id, vehiculeId: b.vehicule.id, lignes: [forfait([{ pieceId: b.p1.id, quantite: 1 }])] });
+    const { ordre } = await validerDevis(id, { mecanicienId: b.meca.id, rdv: { debut: "2027-04-02T09:00", fin: "2027-04-02T10:00" } });
+    expect(await stock(b.p1.id)).toBe(4);
+    const br = await db.$transaction((tx) => creerBrouillonTx(tx, ordre!.id));
+    const l = await db.ligneFacture.findFirstOrThrow({ where: { factureId: br.id } });
+    await modifierBrouillon(br.id, { lignes: [{ ...forfait([{ pieceId: b.p1.id, quantite: 1 }, { pieceId: b.p2.id, quantite: 2 }]), id: l.id }] });
+    expect(await stock(b.p2.id)).toBe(5);
+    await emettreBrouillon(br.id, b.user.id);
+    expect([await stock(b.p1.id), await stock(b.p2.id)]).toEqual([4, 3]);
   });
 });
 

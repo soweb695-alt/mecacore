@@ -17,8 +17,16 @@ export const ligneSchema = z
     pieceId: idStr.nullable().optional(),
     /** Forfait choisi dans les tarifs : ses pièces sont décrémentées du stock à la validation. */
     tarifId: idStr.nullable().optional(),
+    /** Pièces du stock rattachées depuis le descriptif : décrémentées comme les pièces d'un forfait (× quantité de la ligne). */
+    piecesDescriptif: z
+      .array(z.object({ pieceId: idStr, quantite: z.number().int("Quantité entière requise").min(1, "Quantité invalide").max(1000) }))
+      .max(20, "20 pièces maximum par ligne")
+      .optional(),
   })
   .superRefine((l, ctx) => {
+    if (l.piecesDescriptif?.length && !Number.isInteger(l.quantite)) {
+      ctx.addIssue({ code: "custom", path: ["quantite"], message: "Une ligne avec des pièces du stock doit avoir une quantité entière" });
+    }
     if (l.pieceId && (l.type !== "PIECE" || !Number.isInteger(l.quantite))) {
       ctx.addIssue({ code: "custom", path: ["quantite"], message: "La quantité d'une pièce doit être un nombre entier" });
     }

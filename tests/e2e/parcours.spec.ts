@@ -661,10 +661,14 @@ test("21. devis : descriptif d'une ligne de tarif, modifiable et conservé", asy
   await page.getByRole("option", { name: /Sophie Leroy/ }).first().click();
   await page.locator('select[aria-label="Ajouter : Main d\'œuvre"]').selectOption({ index: 1 });
   await page.getByRole("button", { name: "Ajouter un descriptif" }).click();
-  await page.getByLabel(/Descriptif de/).fill("Diagnostic complet du circuit de freinage.\nEssai routier inclus.");
+  await page.getByLabel(/Descriptif de/).fill("Diagnostic complet du circuit de freinage.\nEssai routier inclus.\nPlaquettes E2E-PLA");
+  // Une référence du stock tapée dans le descriptif est proposée : un clic la rattache (déduite du stock à la validation).
+  await page.getByRole("button", { name: /Rattacher E2E-PLAQ/ }).click();
+  await page.getByLabel("Quantité de E2E-PLAQ").fill("2");
   await page.getByRole("button", { name: "Enregistrer en brouillon" }).click();
   await expect(page).toHaveURL(/\/devis\/[a-z0-9]+$/);
-  await expect(page.getByLabel(/Descriptif de/)).toHaveValue("Diagnostic complet du circuit de freinage.\nEssai routier inclus.");
+  await expect(page.getByLabel(/Descriptif de/)).toHaveValue("Diagnostic complet du circuit de freinage.\nEssai routier inclus.\nPlaquettes E2E-PLA");
+  await expect(page.getByLabel("Quantité de E2E-PLAQ")).toHaveValue("2");
   // L'envoi par e-mail demande toujours une confirmation.
   await page.getByRole("button", { name: "Envoyer par e-mail" }).click();
   await expect(page.getByRole("dialog").getByText(/Envoyer « Devis » \?/)).toBeVisible();

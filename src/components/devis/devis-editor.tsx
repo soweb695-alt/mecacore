@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ClientForm, type ClientCree } from "@/components/clients/client-form";
 import { VehiculeForm, type VehiculeSaved } from "@/components/clients/vehicule-form";
-import { DescriptifLigne } from "@/components/devis/descriptif-ligne";
+import { DescriptifLigne, type PieceDescriptif } from "@/components/devis/descriptif-ligne";
 import { NouvellePieceDialog, type PieceCreee } from "@/components/devis/nouvelle-piece-dialog";
 import { SearchPicker } from "@/components/devis/search-picker";
 import { apercu, OptionsFactureFields, remiseDepuisState, stateDepuisRemise, type OptionsFactureState } from "@/components/factures/options-facture";
@@ -49,6 +49,8 @@ interface LigneState {
   /** Forfait des tarifs : ses pièces sont décrémentées du stock à la validation du devis. */
   tarifId?: string | null;
   piecesComprises?: { reference: string; nom: string; quantite: number }[];
+  /** Pièces du stock rattachées depuis le descriptif (déduites du stock à la validation). */
+  piecesDescriptif?: PieceDescriptif[];
 }
 
 export interface ClientLite {
@@ -336,6 +338,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
         pieceId: l.pieceId,
         prixCatalogueHT: l.type === "PIECE" ? l.prixCatalogueHT : null,
         tarifId: l.type === "FORFAIT" ? (l.tarifId ?? null) : null,
+        piecesDescriptif: (l.piecesDescriptif ?? []).map((p) => ({ pieceId: p.pieceId, quantite: p.quantite })),
       })),
     };
     if (!client) return void toast.error("Sélectionnez un client.");
@@ -573,7 +576,7 @@ export function DevisEditor({ initial, tarifs, voirMarges, voirAchat = false, st
                       <td className="px-2 py-2 text-xs text-muted-foreground">{TYPE_LABEL[l.type]}</td>
                       <td className="px-2 py-1.5">
                         <Input aria-label="Désignation" value={l.designation} maxLength={200} onChange={(e) => maj(l.key, { designation: e.target.value })} />
-                        <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} />
+                        <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} pieces={l.piecesDescriptif} onPiecesChange={(p) => maj(l.key, { piecesDescriptif: p })} />
                         {alerte && <p className={alerte.niveau === "rupture" ? "mt-1 text-xs text-destructive" : "mt-1 text-xs text-warning"}>{alerte.texte}</p>}
                         {l.piecesComprises && l.piecesComprises.length > 0 && (
                           <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
