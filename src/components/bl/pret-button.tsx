@@ -21,50 +21,70 @@ function annonceEmail(e: ResultatEmail | undefined) {
   else toast.warning("L'e-mail du bon de livraison n'a pas pu partir. Réessayez dans un instant.");
 }
 
-/** Envoi du bon de livraison au client, toujours à la main et après confirmation (aucun envoi automatique). */
-export function BlRenvoyerButton({ id, numero, client, email }: { id: string; numero: string; client: string; email: string | null }) {
-  const [open, setOpen] = useState(false);
+/** Fenêtre de confirmation de l'envoi du BL au client (aucun envoi automatique). */
+export function EnvoiBlDialog({ id, numero, client, email, open, onOpenChange }: { id: string; numero: string; client: string; email: string | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const [pending, setPending] = useState(false);
   return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Envoyer {numero} par e-mail ?</DialogTitle>
+          <DialogDescription>
+            {email ? <>Le bon de livraison (PDF sans prix) sera envoyé à {client} ({email}).</> : <>{client} n&apos;a pas d&apos;adresse e-mail : ajoutez-la sur sa fiche.</>}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button
+            disabled={pending || !email}
+            onClick={async () => {
+              setPending(true);
+              try {
+                annonceEmail(await api<ResultatEmail>(`/api/bons-livraison/${id}/envoyer`, "POST"));
+                onOpenChange(false);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
+              } finally {
+                setPending(false);
+              }
+            }}
+          >
+            <Mail aria-hidden />
+            Envoyer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Bouton « Envoyer le BL » : toujours à la main et après confirmation. */
+export function BlRenvoyerButton(props: { id: string; numero: string; client: string; email: string | null }) {
+  const [open, setOpen] = useState(false);
+  return (
     <>
-      <Button size="sm" variant="outline" disabled={pending} onClick={() => setOpen(true)}>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         <Mail aria-hidden />
         Envoyer le BL
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Envoyer {numero} par e-mail ?</DialogTitle>
-            <DialogDescription>
-              {email ? <>Le bon de livraison (PDF sans prix) sera envoyé à {client} ({email}).</> : <>{client} n&apos;a pas d&apos;adresse e-mail : ajoutez-la sur sa fiche.</>}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Annuler
-            </Button>
-            <Button
-              disabled={pending || !email}
-              onClick={async () => {
-                setPending(true);
-                try {
-                  annonceEmail(await api<ResultatEmail>(`/api/bons-livraison/${id}/envoyer`, "POST"));
-                  setOpen(false);
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
-                } finally {
-                  setPending(false);
-                }
-              }}
-            >
-              <Mail aria-hidden />
-              Envoyer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EnvoiBlDialog {...props} open={open} onOpenChange={setOpen} />
     </>
   );
+}
+
+/** Passe le bon à l'étape suivante (Prêt à être retiré, puis Livré) et l'annonce. Renvoie false en cas d'erreur. */
+export async function avancerBl(id: string, action: "prete" | "livre"): Promise<boolean> {
+  try {
+    await api(`/api/bons-livraison/${id}/${action}`, "POST");
+    // Aucun e-mail automatique : le BL s'envoie ensuite avec « Envoyer le BL ».
+    toast.success(action === "livre" ? "Commande livrée. Pour envoyer le bon au client : « Envoyer le BL »." : "Commande prête à être retirée");
+    return true;
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
+    return false;
+  }
 }
 
 /** Fait avancer un bon de livraison : En attente → Prêt à être retiré → Livré. */
@@ -79,16 +99,8 @@ export function BlStatutButton({ id, action }: { id: string; action: "prete" | "
       disabled={pending}
       onClick={async () => {
         setPending(true);
-        try {
-          await api(`/api/bons-livraison/${id}/${action}`, "POST");
-          // Aucun e-mail automatique : le BL s'envoie ensuite avec « Envoyer le BL ».
-          toast.success(livre ? "Commande livrée. Pour envoyer le bon au client : « Envoyer le BL »." : "Commande prête à être retirée");
-          router.refresh();
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Une erreur est survenue.");
-        } finally {
-          setPending(false);
-        }
+        if (await avancerBl(id, action)) router.refresh();
+        setPending(false);
       }}
     >
       {livre ? <Truck aria-hidden /> : <PackageCheck aria-hidden />}

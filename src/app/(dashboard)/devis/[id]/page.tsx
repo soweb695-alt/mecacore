@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { libelleComposition } from "@/lib/composition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DevisActions, LienDocument } from "@/components/devis/devis-actions";
@@ -110,6 +111,7 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
               pieceId: l.pieceId,
               tarifId: l.tarifId,
               piecesComprises: l.piecesComprises,
+              piecesDescriptif: l.piecesDescriptif.map((p) => ({ pieceId: p.pieceId, reference: p.reference, nom: p.nom, quantite: p.quantite })),
               stock: l.stock,
               seuilAlerte: l.seuilAlerte,
               prixAchatHT: l.prixAchatHT,
@@ -142,6 +144,9 @@ export default async function DevisDetail({ params }: { params: Promise<{ id: st
                     <TableCell>
                       {l.designation}
                       {l.description && <div className="whitespace-pre-line text-xs text-muted-foreground">{l.description}</div>}
+                      {l.piecesComprises.length + l.piecesDescriptif.length > 0 && (
+                        <div className="text-xs text-muted-foreground">{libelleComposition([...l.piecesComprises, ...l.piecesDescriptif], l.quantite)}</div>
+                      )}
                       <div className="text-xs text-muted-foreground">{LABELS.typeLigne[l.type]}</div>
                       {l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: l.prixUnitaireHT, prixCatalogueHT: l.prixCatalogueHT }) > 0 && (
                         <div className="text-xs text-success">

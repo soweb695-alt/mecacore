@@ -95,7 +95,10 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                 pieceId: l.pieceId,
                 stock: l.pieceId ? (stock.get(l.pieceId) ?? null) : null,
                 prixCatalogueHT: l.prixCatalogueHT !== null ? Number(l.prixCatalogueHT) : null,
-                composition: libelleComposition(lireComposition(l.composition)),
+                composition: libelleComposition(lireComposition(l.composition).filter((p) => !p.descriptif)),
+                piecesDescriptif: lireComposition(l.composition)
+                  .filter((p) => p.descriptif)
+                  .map((p) => ({ pieceId: p.pieceId, reference: p.reference, nom: p.nom, quantite: p.quantite })),
               })),
             }}
           />
@@ -193,6 +196,7 @@ export default async function FactureDetail({ params }: { params: Promise<{ id: 
                     <TableCell>
                       {l.designation}
                       {l.description && <div className="whitespace-pre-line text-xs text-muted-foreground">{l.description}</div>}
+                      {lireComposition(l.composition).length > 0 && <div className="text-xs text-muted-foreground">{libelleComposition(lireComposition(l.composition), Number(l.quantite))}</div>}
                       {l.prixCatalogueHT !== null && tauxRemiseLigne({ prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: Number(l.prixCatalogueHT) }) > 0 && (
                         <div className="text-xs text-success">
                           Catalogue {eur(l.prixCatalogueHT.toString())} · remise pro {tauxRemiseLigne({ prixUnitaireHT: Number(l.prixUnitaireHT), prixCatalogueHT: Number(l.prixCatalogueHT) })} %

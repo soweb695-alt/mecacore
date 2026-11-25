@@ -4,7 +4,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DescriptifLigne } from "@/components/devis/descriptif-ligne";
+import { DescriptifLigne, type PieceDescriptif } from "@/components/devis/descriptif-ligne";
 import { SearchPicker } from "@/components/devis/search-picker";
 import { apercu, OptionsFactureFields, optionsInitiales, payloadOptions, type OptionsFactureState } from "@/components/factures/options-facture";
 import { Field } from "@/components/forms/field";
@@ -27,6 +27,8 @@ interface Ligne {
   designation: string;
   /** Descriptif imprimé sous la ligne (pré-rempli depuis le tarif, modifiable). */
   description?: string;
+  /** Pièces du stock rattachées depuis le descriptif (déduites du stock à l'émission). */
+  piecesDescriptif?: PieceDescriptif[];
   quantite: string;
   prixUnitaireHT: string;
   /** PU TTC : fait foi pour les totaux ; modifier le HT ou le TTC recalcule l'autre. */
@@ -135,6 +137,7 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
           type: l.type,
           designation: l.designation.trim(),
           description: l.description?.trim() || null,
+          piecesDescriptif: (l.piecesDescriptif ?? []).map((p) => ({ pieceId: p.pieceId, quantite: p.quantite })),
           quantite: num(l.quantite),
           prixUnitaireHT: num(l.prixUnitaireHT),
           prixUnitaireTTC: num(l.prixTTC),
@@ -236,7 +239,7 @@ export function FactureForm({ echeanceParDefaut, brouillon, tarifs = [] }: { ech
                 <Input id={`des-${l.key}`} maxLength={200} value={l.designation} onChange={(e) => maj(l.key, { designation: e.target.value })} />
               </Field>
               <div className="col-span-full -mt-1 md:order-last">
-                <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} />
+                <DescriptifLigne valeur={l.description ?? ""} designation={l.designation} onChange={(v) => maj(l.key, { description: v })} pieces={l.piecesDescriptif} onPiecesChange={(p) => maj(l.key, { piecesDescriptif: p })} moment="à l'émission de la facture" />
               </div>
               <Field label="Qté" htmlFor={`qte-${l.key}`} hint={l.stock !== null ? `Stock : ${l.stock}` : undefined}>
                 <Input id={`qte-${l.key}`} inputMode="decimal" value={l.quantite} onChange={(e) => maj(l.key, { quantite: e.target.value })} />

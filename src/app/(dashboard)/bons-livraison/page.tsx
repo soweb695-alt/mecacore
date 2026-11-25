@@ -48,7 +48,7 @@ export default async function BonsPage() {
                 clientEmail: b.client?.anonymiseLe ? null : (b.client?.email ?? null),
                 devis: b.devis,
                 facture: b.facture ? { id: b.facture.id, numero: b.facture.numero ?? "Brouillon" } : null,
-                pieces: b.lignes.map((l) => `${l.designation || "Pièce"} × ${l.quantite}`).join(", "),
+                pieces: b.lignes.map((l) => ({ designation: l.designation || "Pièce", quantite: l.quantite })),
                 date: b.dateLivraison.toISOString(),
                 statut: b.statut,
               }))}

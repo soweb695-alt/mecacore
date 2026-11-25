@@ -9,7 +9,8 @@ import { envoyerEmail } from "@/lib/services/messages";
 import { emailRecapImpayes } from "@/lib/messages/templates";
 import { prochainNumero } from "@/lib/numbering";
 import { appliquerRemiseGlobale, appliquerRemisePro, calculerTotaux, lireRemiseGlobale, prixLigne, round2, type RemiseGlobale, type Totaux } from "@/lib/money";
-import { quantitesParPiece } from "@/lib/services/devis";
+import { fusionnerCompositions, piecesDuDescriptif, quantitesParPiece } from "@/lib/services/devis";
+import { lireComposition, type PieceComprise } from "@/lib/composition";
 import { verifierReapprovisionnement } from "@/lib/services/reappro";
 import type { LigneInput } from "@/lib/validators/devis";
 
@@ -133,6 +134,15 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
     if (pieces.length !== pieceIds.length) throw new ApiError(400, "Une pièce du stock est introuvable", "PIECE_INTROUVABLE");
     const achat = new Map(pieces.map((p) => [p.id, p.prixAchatHT]));
     const existantes = new Map(f.lignes.map((l) => [l.id, l]));
+    // Les pièces d'un forfait ne suivent que la ligne d'origine (jamais fournies par le client) ; celles du descriptif sont choisies ici.
+    const duTarif = new Map<number, PieceComprise[]>();
+    input.lignes.forEach((l, i) => {
+      const avant = l.id ? existantes.get(l.id) : undefined;
+      const ps = l.type === "FORFAIT" && avant?.type === "FORFAIT" ? lireComposition(avant.composition).filter((p) => !p.descriptif) : [];
+      if (ps.length) duTarif.set(i, ps);
+    });
+    const compos = fusionnerCompositions(duTarif, await piecesDuDescriptif(tx, input.lignes));
+    if (input.lignes.some((l, i) => compos.has(i) && !Number.isInteger(l.quantite))) throw new ApiError(400, "Une ligne avec des pièces du stock doit avoir une quantité entière", "QUANTITE_INVALIDE");
     await tx.ligneFacture.deleteMany({ where: { factureId: id } });
     await tx.facture.update({
       where: { id },
@@ -141,7 +151,6 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
         ...totauxEtRemise(calculerTotaux(input.lignes), input),
         lignes: {
           create: input.lignes.map((l, i) => {
-            const avant = l.id ? existantes.get(l.id) : undefined;
             return {
               type: l.type,
               designation: l.designation,
@@ -152,8 +161,7 @@ export async function modifierBrouillon(id: string, input: BrouillonInput & Opti
               tvaRate: l.tvaRate,
               prixAchatHT: l.pieceId ? (achat.get(l.pieceId) ?? null) : null,
               pieceId: l.type === "PIECE" ? (l.pieceId ?? null) : null,
-              // Les pièces d'un forfait ne suivent que la ligne d'origine (jamais fournies par le client).
-              composition: l.type === "FORFAIT" && avant?.type === "FORFAIT" ? ((avant.composition as Prisma.InputJsonValue | null) ?? undefined) : undefined,
+              composition: (compos.get(i) as unknown as Prisma.InputJsonValue) ?? undefined,
               position: i,
             };
           }),
@@ -320,9 +328,10 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
     const client = await tx.client.findUnique({ where: { id: input.clientId } });
     if (!client || client.anonymiseLe) throw new ApiError(404, "Client introuvable", "INTROUVABLE");
 
-    // Prix d'achat tracé pour l'analyse des marges ; stock décrémenté pour chaque pièce du stock.
-    const demandes = new Map<string, number>();
-    for (const l of input.lignes) if (l.pieceId) demandes.set(l.pieceId, (demandes.get(l.pieceId) ?? 0) + l.quantite);
+    // Prix d'achat tracé pour l'analyse des marges ; stock décrémenté pour chaque pièce du stock (lignes Pièce et
+    // pièces rattachées depuis le descriptif).
+    const compos = await piecesDuDescriptif(tx, input.lignes);
+    const demandes = quantitesParPiece(input.lignes.map((l, i) => ({ type: "PIECE", pieceId: l.pieceId, quantite: l.quantite, composition: compos.get(i) })));
     const pieces = await tx.piece.findMany({ where: { id: { in: [...demandes.keys()] } }, select: { id: true, nom: true, reference: true, prixAchatHT: true } });
     if (pieces.length !== demandes.size) throw new ApiError(400, "Une pièce du stock est introuvable", "PIECE_INTROUVABLE");
     const penurie: { reference: string; nom: string; demande: number; disponible: number }[] = [];
@@ -364,6 +373,7 @@ export async function creerFactureManuelle(userId: string, input: { clientId: st
             tvaRate: l.tvaRate,
             prixAchatHT: l.pieceId ? (achat.get(l.pieceId) ?? null) : null,
             pieceId: l.pieceId ?? null,
+            composition: (compos.get(i) as unknown as Prisma.InputJsonValue) ?? undefined,
             position: i,
           })),
         },
@@ -436,7 +446,7 @@ export async function enregistrerPaiement(factureId: string, p: PaiementInput) {
 }
 
 export async function annulerFacture(id: string) {
-  const f = await db.facture.findUnique({ where: { id }, select: { montantPaye: true, statut: true, manuelle: true, lignes: { select: { pieceId: true, quantite: true } } } });
+  const f = await db.facture.findUnique({ where: { id }, select: { montantPaye: true, statut: true, manuelle: true, lignes: { select: { type: true, pieceId: true, quantite: true, composition: true } } } });
   if (!f) throw new ApiError(404, "Facture introuvable", "INTROUVABLE");
   if (f.statut === "ANNULEE") return { id };
   if (f.statut === "BROUILLON") throw new ApiError(409, "Un brouillon n'est pas émis : il ne peut pas être annulé", "STATUT_INVALIDE");
@@ -447,7 +457,8 @@ export async function annulerFacture(id: string) {
     if (r.count === 0) return;
     // Une facture manuelle a décrémenté le stock : on le restitue.
     if (f.manuelle) {
-      for (const l of f.lignes) if (l.pieceId) await tx.piece.update({ where: { id: l.pieceId }, data: { stock: { increment: Number(l.quantite) } } });
+      const rendues = quantitesParPiece(f.lignes.map((l) => ({ type: l.type, pieceId: l.pieceId, quantite: Number(l.quantite), composition: l.composition })));
+      for (const [pieceId, qte] of rendues) await tx.piece.update({ where: { id: pieceId }, data: { stock: { increment: qte } } });
     }
   });
   return { id };

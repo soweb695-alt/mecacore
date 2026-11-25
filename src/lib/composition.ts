@@ -6,6 +6,8 @@ export interface PieceComprise {
   nom: string;
   /** Quantité pour un forfait (multipliée par la quantité de la ligne). */
   quantite: number;
+  /** Pièce rattachée à la main depuis le descriptif de la ligne (et non issue du tarif). */
+  descriptif?: boolean;
 }
 
 /** Lecture tolérante du champ JSON `composition` (null, ancien format ou donnée invalide → liste vide). */
@@ -13,7 +15,7 @@ export function lireComposition(json: unknown): PieceComprise[] {
   if (!Array.isArray(json)) return [];
   return json.flatMap((p) =>
     p && typeof p === "object" && typeof p.pieceId === "string" && Number.isInteger(p.quantite) && p.quantite > 0
-      ? [{ pieceId: p.pieceId, reference: String(p.reference ?? ""), nom: String(p.nom ?? ""), quantite: p.quantite as number }]
+      ? [{ pieceId: p.pieceId, reference: String(p.reference ?? ""), nom: String(p.nom ?? ""), quantite: p.quantite as number, ...(p.descriptif === true ? { descriptif: true } : {}) }]
       : [],
   );
 }
