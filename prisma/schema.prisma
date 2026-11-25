@@ -714,6 +714,8 @@ model ParametreGarage {
   modesPaiement          ModePaiement[]  @default([CB, ESPECES, CHEQUE, VIREMENT, PLUSIEURS_FOIS])
   delaiPaiementDefaut    Int             @default(30)
   mentionsFacture        String?
+  /// Mention « Bon pour accord » imprimée au-dessus de la signature du client sur le PDF de l'ordre de réparation (vide : texte par défaut).
+  mentionAccordOR        String?
   affichageRemise        AffichageRemise @default(LIGNE)
   /// Paramètres › Communication : expéditeur des e-mails (vide : nom du garage / adresse de l'hébergeur).
   expediteurNom          String?

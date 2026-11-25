@@ -18,6 +18,7 @@ import {
   libelleDelai,
   LIBELLES_AFFICHAGE_REMISE,
   LIBELLES_MODE,
+  MENTION_ACCORD_OR_DEFAUT,
   MENTIONS_FACTURE_DEFAUT,
   MODES_PAIEMENT,
   type FacturationInput,
@@ -112,6 +113,17 @@ export function FacturationForm({ initial }: { initial: FacturationInput }) {
         </Field>
         {v.mentionsFacture.trim() !== MENTIONS_FACTURE_DEFAUT && (
           <Button type="button" variant="link" size="sm" className="mt-1 h-auto px-0" onClick={() => set("mentionsFacture", MENTIONS_FACTURE_DEFAUT)}>
+            Rétablir le texte par défaut
+          </Button>
+        )}
+      </SectionParametres>
+
+      <SectionParametres titre="Bon pour accord de l'ordre de réparation" description="Texte imprimé au-dessus de la signature du client sur le PDF de l'ordre de réparation (ex. conditions de gardiennage, sort des pièces remplacées).">
+        <Field label="Mention" htmlFor="mention-accord" error={erreurs.mentionAccordOR}>
+          <Textarea id="mention-accord" rows={4} maxLength={1000} value={v.mentionAccordOR} onChange={(e) => set("mentionAccordOR", e.target.value)} />
+        </Field>
+        {v.mentionAccordOR.trim() !== MENTION_ACCORD_OR_DEFAUT && (
+          <Button type="button" variant="link" size="sm" className="mt-1 h-auto px-0" onClick={() => set("mentionAccordOR", MENTION_ACCORD_OR_DEFAUT)}>
             Rétablir le texte par défaut
           </Button>
         )}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FileDown } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AssignMecanicien } from "@/components/or/assign-mecanicien";
 import { FicheControle } from "@/components/or/fiche-controle";
@@ -64,8 +65,21 @@ export default async function OrdreDetail({ params }: { params: Promise<{ id: st
         }
         description={`${o.numero} · ${nomClient(o.devis.client)}${v?.motorisation ? ` · ${v.motorisation}` : ""}${o.kilometrage != null ? ` · ${o.kilometrage.toLocaleString("fr-FR")} km` : ""}`}
         actions={
-          !mecano && (
+          mecano ? (
+            <a href={`/api/ordres-reparation/${o.id}/pdf`} target="_blank" rel="noopener" className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
+              <FileDown className="size-4" aria-hidden />
+              PDF de l&apos;OR
+            </a>
+          ) : (
             <>
+              <a href={`/api/ordres-reparation/${o.id}/pdf?prix=1`} target="_blank" rel="noopener" className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
+                <FileDown className="size-4" aria-hidden />
+                PDF avec prix
+              </a>
+              <a href={`/api/ordres-reparation/${o.id}/pdf`} target="_blank" rel="noopener" className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3.5 text-sm font-medium hover:bg-muted">
+                <FileDown className="size-4" aria-hidden />
+                PDF sans prix
+              </a>
               {(o.statut === "A_TRAITER_MAGASIN" || o.statut === "FACTURE") && can(user, "create", "message") && (
                 <EnvoiEmailButton label="Véhicule prêt" sujet="Véhicule prêt" url={`/api/ordres-reparation/${o.id}/vehicule-pret`} client={nomClient(o.devis.client)} email={o.devis.client.email} />
               )}

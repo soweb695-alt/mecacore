@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { modele } from "@/lib/messages/modeles-email";
 import { requirePage } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { MENTIONS_FACTURE_DEFAUT } from "@/lib/validators/parametres";
+import { MENTION_ACCORD_OR_DEFAUT, MENTIONS_FACTURE_DEFAUT } from "@/lib/validators/parametres";
 
 export const metadata: Metadata = { title: "Paramètres" };
 
@@ -58,6 +58,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
             prefixFacture: g?.prefixFacture ?? "FAC",
             prefixBonLivraison: g?.prefixBonLivraison ?? "BL",
             mentionsFacture: g?.mentionsFacture?.trim() || MENTIONS_FACTURE_DEFAUT,
+            mentionAccordOR: g?.mentionAccordOR?.trim() || MENTION_ACCORD_OR_DEFAUT,
             affichageRemise: g?.affichageRemise ?? "LIGNE",
           }}
         />
